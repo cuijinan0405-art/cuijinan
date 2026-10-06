@@ -83,3 +83,17 @@ main { display: flex; height: calc(100% - 51px); }
   .templates { margin-left: 0; }
   #side { position: absolute; right: 0; top: 51px; bottom: 0; width: 100%; z-index: 20; }
 }
+
+/* 模型管理 */
+.models-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.models-head select { background: #1b1b1b; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; font: inherit; }
+.model-list { max-height: 60vh; overflow-y: auto; margin-top: 10px; }
+.model-row { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; background: #262626; }
+.model-row .top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.model-row .name { font-weight: 600; }
+.model-row .desc { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.model-row .tag { font-size: 12px; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--line); white-space: nowrap; }
+.model-row .tag.ok { color: var(--ok); border-color: var(--ok); }
+.model-row .bar { height: 6px; background: #1b1b1b; border-radius: 3px; margin-top: 8px; overflow: hidden; }
+.model-row .bar div { height: 100%; background: var(--accent); width: 0; transition: width .5s; }
+.model-row .err { color: var(--err); font-size: 12px; white-space: pre-wrap; margin-top: 6px; }

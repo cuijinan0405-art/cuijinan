@@ -25,8 +25,15 @@ class _Out:
 
 class DiffusionPipeline:
     @classmethod
-    def from_pretrained(cls, model, torch_dtype=None):
+    def from_pretrained(cls, model, torch_dtype=None, **parts):
+        print(f">> stub pipeline {model} parts={sorted(parts)}", flush=True)
         return cls()
+
+    def load_lora_weights(self, path, adapter_name=None):
+        print(f">> stub lora {path}", flush=True)
+
+    def set_adapters(self, names, adapter_weights=None):
+        pass
 
     def to(self, device):
         return self
@@ -37,3 +44,22 @@ class DiffusionPipeline:
             if callback_on_step_end:
                 callback_on_step_end(self, i, 0, {})
         return _Out(_Img(width, height, generator.seed))
+
+
+LOADED = {}  # 测试检查用：记录加载了哪些替换组件
+
+
+class GGUFQuantizationConfig:
+    def __init__(self, compute_dtype=None):
+        self.compute_dtype = compute_dtype
+
+
+class QwenImageTransformer2DModel:
+    @classmethod
+    def from_single_file(cls, path, **kw):
+        print(f">> stub transformer from_single_file {path} gguf={'quantization_config' in kw}", flush=True)
+        return cls()
+
+    @classmethod
+    def from_pretrained(cls, path, **kw):
+        return cls()

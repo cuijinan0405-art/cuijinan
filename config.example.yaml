@@ -14,12 +14,26 @@ image:
     # ★1 装好 torch + diffusers 的 Python。可以是 "python"、"uv run python"、
     #     或者整合包里的完整路径，例如 "D:/qwen-image/python/python.exe"
     python: python
-    # ★2 千问 Image 2.1 模型：本地目录（推荐）或 HuggingFace 名称
+    # ★2 你已经有的千问 Image 2.1 模型目录（没有的话可以留着，用界面「📦 模型」一键下载）
     model: D:/models/Qwen-Image-2.1
     device: cuda
     dtype: bfloat16
-    offload: false      # 显存不够（<40G）时改成 true，会慢一些
+    offload: false      # 显存不够（官方版 BF16 约需 32G）时改成 true，会慢一些；或改用 GGUF 量化版
     port: 7862
+
+  # 「📦 模型」界面下载的模型放这里（官方版约 30GB，留足空间）
+  models_dir: D:/models/hermes-media
+  download_source: hf-mirror   # huggingface | hf-mirror（国内镜像）| modelscope（需 pip install modelscope）
+  default_model: ""            # 留空 = 上面的 model；也可以写模型管理里的名称或 id
+
+  # 手动添加别的模型（可选），会出现在「模型」下拉框里：
+  # models:
+  #   - name: 我的 LoRA 版
+  #     model: D:/models/Qwen-Image-2.1        # 基础模型（diffusers 目录）
+  #     transformer: D:/models/xxx-Q8_0.gguf   # 可选：替换扩散模型（.gguf / .safetensors）
+  #     text_encoder: D:/models/xxx-encoder    # 可选：替换文本编码器
+  #     lora: D:/loras/xxx.safetensors         # 可选：LoRA
+  #     lora_scale: 0.8
   steps: 50             # 默认步数（界面里每次都能改）
   cfg: 4.0
   default_ratio: "1:1"

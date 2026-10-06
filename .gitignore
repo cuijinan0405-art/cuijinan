@@ -7,3 +7,4 @@ config.yaml
 voices/*.wav
 voices/*.mp3
 .pytest_cache/
+models/

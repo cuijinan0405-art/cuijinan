@@ -65,7 +65,7 @@ class ImageGenerator:
 
     async def generate(self, prompt: str, ratio: str | None = None, negative_prompt: str | None = None,
                        seed: int | None = None, count: int = 1, style: str | None = None,
-                       steps: int | None = None, cfg_scale: float | None = None) -> Result:
+                       steps: int | None = None, cfg_scale: float | None = None, model: str | None = None) -> Result:
         if not prompt.strip():
             raise ValueError("提示词不能为空")
         st = Presets.load(self.cfg).style(style)
@@ -82,7 +82,7 @@ class ImageGenerator:
         cfg_scale = float(cfg_scale or self.cfg.image["cfg"])
         backend = self.cfg.image["backend"]
         if backend == "local":
-            r = await self._local(prompt, neg, width, height, seed, count, steps, cfg_scale)
+            r = await self._local(prompt, neg, width, height, seed, count, steps, cfg_scale, model)
         elif backend == "comfyui":
             r = await self._comfyui(prompt, neg, width, height, seed, count)
         elif backend == "openai":
@@ -92,9 +92,9 @@ class ImageGenerator:
         r.info.update({"style": st.name if st else None, "prompt": prompt})
         return r
 
-    async def _local(self, prompt, neg, width, height, seed, count, steps, cfg_scale) -> Result:
+    async def _local(self, prompt, neg, width, height, seed, count, steps, cfg_scale, model) -> Result:
         sec = self.cfg.image["local"]
-        url = await asyncio.to_thread(self.workers["image"].ensure_ready)
+        url = await asyncio.to_thread(self.workers.image_ready, model)
         prefix = _stamp(prompt, "img")
         files, seeds = [], []
         async with httpx.AsyncClient(timeout=sec.get("timeout", 1200), transport=self.transport) as c:
@@ -108,7 +108,7 @@ class ImageGenerator:
                 dest.write_bytes(r.content)
                 files.append(dest)
                 seeds.append(seed + i)
-        return Result(files, {"backend": "local", "size": f"{width}x{height}", "seeds": seeds})
+        return Result(files, {"backend": "local", "model": model, "size": f"{width}x{height}", "seeds": seeds})
 
     async def _comfyui(self, prompt, neg, width, height, seed, count) -> Result:
         sec = self.cfg.image["comfyui"]

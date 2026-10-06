@@ -56,6 +56,10 @@ DEFAULTS: dict[str, Any] = {
             "model": "qwen-image-2.1",
             "timeout": 600,
         },
+        "models_dir": "models",  # 「模型管理」下载的模型放这里
+        "download_source": "huggingface",  # huggingface | hf-mirror | modelscope
+        "default_model": "",  # 留空 = local.model；也可以写模型管理里的模型名或 id
+        "models": [],  # 手动添加的模型，见 config.example.yaml
         "default_ratio": "1:1",
         "steps": 50,
         "cfg": 4.0,

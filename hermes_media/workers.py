@@ -18,6 +18,7 @@ from pathlib import Path
 import httpx
 
 from .config import PROJECT_ROOT, Config
+from .models import ModelRegistry
 
 WORKERS_DIR = PROJECT_ROOT / "workers"
 
@@ -98,6 +99,18 @@ class Worker:
             time.sleep(1)
         raise WorkerError(f"{self.label}启动超时（{self.startup_timeout}s），日志: {self.log_path}")
 
+    def shutdown(self, timeout: float = 30) -> None:
+        """让端口上的进程退出（不管是不是本进程启动的），用于切换模型。"""
+        try:
+            httpx.post(self.url + "/shutdown", timeout=3)
+        except httpx.HTTPError:
+            pass
+        self.stop()
+        deadline = time.time() + timeout
+        while self.health() and time.time() < deadline:
+            time.sleep(0.3)
+        self.proc = None
+
     def stop(self) -> None:
         if self.proc and self.proc.poll() is None:
             self.proc.terminate()
@@ -114,10 +127,11 @@ class WorkerManager:
         log_dir = cfg.output_dir / "logs"
 
         img = cfg.image["local"]
-        argv = _split(img["python"]) + [
-            str(WORKERS_DIR / "image_worker.py"), "--model", str(img["model"]), "--port", str(img["port"]),
-            "--device", img["device"], "--dtype", img["dtype"], "--parent-pid", str(os.getpid())] + (["--offload"] if img.get("offload") else [])
-        self.workers["image"] = Worker("image", "千问 Image 2.1 ", int(img["port"]), argv,
+        self._image_base_argv = _split(img["python"]) + [
+            str(WORKERS_DIR / "image_worker.py"), "--port", str(img["port"]), "--device", img["device"],
+            "--dtype", img["dtype"], "--parent-pid", str(os.getpid())] + (["--offload"] if img.get("offload") else [])
+        self._switch_lock = threading.Lock()
+        self.workers["image"] = Worker("image", "千问 Image 2.1 ", int(img["port"]), self._image_argv(None),
                                        cfg.resolve_path(img["cwd"]) if img.get("cwd") else None,
                                        float(img["startup_timeout"]), log_dir)
 
@@ -132,6 +146,28 @@ class WorkerManager:
 
     def __getitem__(self, name: str) -> Worker:
         return self.workers[name]
+
+    def _image_argv(self, model: str | None) -> list[str]:
+        try:
+            entry, spec = ModelRegistry(self.cfg).load_spec(model)
+        except ValueError:
+            if model:
+                raise
+            return self._image_base_argv + ["--model", str(self.cfg.image["local"]["model"]), "--model-id", "default"]
+        return self._image_base_argv + spec.args() + ["--model-id", entry.id]
+
+    def image_ready(self, model: str | None = None) -> str:
+        """确保出图进程加载的是指定模型（不同就重启换模型），返回地址。"""
+        with self._switch_lock:
+            w = self.workers["image"]
+            argv = self._image_argv(model)
+            want = argv[argv.index("--model-id") + 1]
+            h = w.health()
+            if h and (h.get("model_id") not in (want, None) or h.get("state") == "error"):
+                print(f"[hermes-media] 重新加载出图模型: {h.get('model_id')} → {want}", flush=True)
+                w.shutdown()
+            w.argv = argv
+            return w.ensure_ready()
 
     def status(self) -> dict:
         out = {}
@@ -151,15 +187,13 @@ class WorkerManager:
                 continue
             if key == "tts" and not self.cfg.tts["local"].get("index_tts_dir"):
                 continue
-            w = self.workers[key]
-            threading.Thread(target=self._safe_ready, args=(w,), daemon=True).start()
+            threading.Thread(target=self._safe_ready, args=(key,), daemon=True).start()
 
-    @staticmethod
-    def _safe_ready(w: Worker) -> None:
+    def _safe_ready(self, key: str) -> None:
         try:
-            w.ensure_ready()
+            self.image_ready() if key == "image" else self.workers[key].ensure_ready()
         except Exception as e:  # noqa: BLE001
-            print(f"[hermes-media] {w.label}预加载失败: {e}", flush=True)
+            print(f"[hermes-media] {self.workers[key].label}预加载失败: {e}", flush=True)
 
     def stop_all(self) -> None:
         for w in self.workers.values():

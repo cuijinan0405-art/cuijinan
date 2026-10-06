@@ -32,6 +32,24 @@
   - 也可以在界面上点「＋ 上传音色」添加自己的声音。
   - 配好 IndexTTS 目录后，它自带的示例音色也会自动出现，开箱就能试。
 
+**模型管理（📦 模型）**：
+- 一键下载出图模型，下载完就出现在「千问 Image 2.1」节点的「模型」下拉框里，选哪个就用哪个。切换时会自动重新加载。
+- 支持 HuggingFace、HF 国内镜像、ModelScope 魔搭三种下载源，断了重试会接着下。
+- 目录里已经放好的模型：
+
+| 模型 | 说明 |
+|---|---|
+| 千问 Image 2.1 官方版 | 完整权重，约 30GB，其它变体都依赖它的文本编码器和 VAE |
+| Uncensored · GGUF Q8（社区） | 量化版扩散模型约 7.6GB，画质几乎无损 |
+| Uncensored · GGUF Q4_K_M（社区） | 约 4.6GB，适合小显存 |
+| Uncensored · 完整版（社区） | 社区上传的完整目录，未验证格式 |
+
+> 关于「无审查版」：多方测试表明，**千问 Image 2.1 官方权重在本地运行时本身就没有内容过滤**（过滤只存在于阿里云的在线服务）。社区标 "Uncensored" 的版本主要是同一份权重的量化版，好处是**省显存**，而不是放开了什么。另外模型使用的是 Qwen Research License（仅限研究和评估用途，商用需要另外和阿里签协议）。
+>
+> 社区仓库可能改名或删除，下载失败时界面会显示原因。也可以在 `presets/models.yaml` 里加别的仓库，或在 `config.yaml` 的 `image.models` 里手动加本地模型（支持替换扩散模型、文本编码器和 LoRA）。
+>
+> 使用 GGUF 版本需要较新的 diffusers，并在千问的 Python 环境里安装 `gguf`：`pip install -U diffusers gguf`。
+
 **和 ComfyUI 一样的操作**：
 - 滚轮缩放，拖动空白处平移；从圆点拖线连接；右键或双击空白处添加节点。
 - `Ctrl+Enter` 运行。正在跑的节点有绿框，出错的节点有红框。
@@ -71,7 +89,7 @@ cd hermes-media
 image:
   local:
     python: D:/qwen-image/python/python.exe   # ★1 装了 torch + diffusers 的 Python
-    model: D:/models/Qwen-Image-2.1           # ★2 千问 Image 2.1 模型目录
+    model: D:/models/Qwen-Image-2.1           # ★2 已有的千问 Image 2.1 模型目录（没有就用界面「📦 模型」下载）
 tts:
   local:
     index_tts_dir: D:/index-tts               # ★3 你的 index-tts 目录
@@ -79,7 +97,7 @@ tts:
 ```
 
 - 两个模型都用**各自原来的 Python 环境**运行，本项目不往里装任何东西。
-- 显存不够同时放下两个模型时，把 `image.local.offload` 改成 `true`。
+- 显存不够时，把 `image.local.offload` 改成 `true`，或者在「📦 模型」里下载 GGUF 量化版。
 
 ### 3. 再次双击 `start.bat`（或 `./start.sh`）
 
@@ -121,7 +139,7 @@ cp -r skills/img skills/voice ~/.hermes/skills/creative/
 帮我写一段 30 字的咖啡店开业口播，用活力带货的声音配音
 ```
 
-Hermes 可用的工具：`generate_image`（含 `style` 风格参数）、`text_to_speech`、`list_styles`、`list_voices`。
+Hermes 可用的工具：`generate_image`（含 `style` 风格、`model` 模型参数）、`text_to_speech`、`list_styles`、`list_voices`。
 
 ## 五、命令行
 
@@ -130,6 +148,9 @@ hermes-media ui                                   # 打开节点界面
 hermes-media image "江南古镇" -s 国风水墨 -r 9:16    # 直接出图
 hermes-media tts "你好呀" -v 温柔女声 -e 开心         # 直接配音
 hermes-media presets                              # 列出风格 / 音色 / 情绪
+hermes-media models                               # 列出出图模型（已下载 / 可下载）
+hermes-media download qwen-image-2.1 --source hf-mirror   # 命令行下载模型
+hermes-media image "江南古镇" -m "GGUF Q8"           # 指定模型出图
 hermes-media doctor                               # 自检
 hermes-media serve                                # MCP 服务（给 Hermes 用）
 ```
@@ -141,6 +162,8 @@ hermes_media/
   webapp.py      网页服务（标准库实现，无额外依赖）
   nodes.py       节点定义 + 图执行器
   presets.py     风格 / 音色 / 情绪预设
+  models.py      出图模型列表（目录 + 已下载 + 自定义）
+  downloads.py   模型下载（HuggingFace / 镜像 / 魔搭）
   workers.py     模型常驻进程管理（自动启动、复用、随主程序退出）
   backends.py    出图 / 配音后端：local（默认）、openai 兼容、comfyui（可选）
   server.py      Hermes MCP 工具
@@ -148,7 +171,7 @@ hermes_media/
 workers/
   image_worker.py      千问 Image 2.1 常驻服务（diffusers）
   indextts2_server.py  IndexTTS2 常驻服务
-presets/         styles.yaml、voices.yaml、emotions.yaml
+presets/         styles.yaml、voices.yaml、emotions.yaml、models.yaml
 skills/          Hermes 的 /img、/voice
 ```
 
@@ -159,7 +182,7 @@ pip install -e ".[dev]" && pytest
 ```
 
 - 测试用 `tests/stubs` 里的假 `torch` / `diffusers` / `indextts` 模块，**真实启动**两个模型进程，然后跑完整流程。
-- 覆盖了：预设、节点图执行、出错处理、网页接口、上传音色、模型进程随父进程退出、MCP 工具注册。
+- 覆盖了：预设、节点图执行、出错处理、网页接口、上传音色、模型下载（假的 HuggingFace）、切换到 GGUF 模型、模型进程随父进程退出、MCP 工具注册。
 
 ## 致谢
 

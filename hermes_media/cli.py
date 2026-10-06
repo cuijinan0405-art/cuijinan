@@ -5,6 +5,8 @@
   hermes-media image "一只橘猫" -s 日系动漫     # 直接出图
   hermes-media tts "你好呀" -v 温柔女声 -e 开心  # 直接配音
   hermes-media presets                       # 列出风格 / 音色 / 情绪预设
+  hermes-media models                        # 列出出图模型（含可下载的）
+  hermes-media download qwen-image-2.1 --source hf-mirror   # 下载模型
   hermes-media doctor                        # 检查配置和模型状态
 """
 
@@ -19,6 +21,8 @@ import httpx
 
 from .backends import ImageGenerator, TTSGenerator
 from .config import Config, find_config_file
+from .downloads import SOURCES, DownloadManager
+from .models import ModelRegistry
 from .presets import Presets
 from .workers import WorkerManager
 
@@ -78,6 +82,25 @@ async def _doctor(cfg: Config) -> int:
     return 0 if ok else 1
 
 
+def _download(cfg: Config, model_id: str, source: str | None) -> int:
+    import time
+
+    dm = DownloadManager(cfg)
+    t = dm.start(model_id, source)
+    print(f"从 {SOURCES[t.source]} 下载 {model_id} → {dm.registry.models_dir / model_id}")
+    while t.state == "running":
+        time.sleep(2)
+        st = dm.status()[model_id]
+        total = f" / {st['total'] / 1024 ** 3:.1f} GB" if st["total"] else ""
+        print(f"\r  已下载 {st['downloaded'] / 1024 ** 3:.2f} GB{total}   ", end="", flush=True)
+    print()
+    if t.state == "error":
+        print(f"下载失败: {t.error}", file=sys.stderr)
+        return 1
+    print("下载完成，可以在界面「千问 Image 2.1」节点的「模型」里选择了。")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="hermes-media", description="Hermes Agent 本地出图/配音工具")
     p.add_argument("-c", "--config", help="配置文件路径（默认 ./config.yaml 或 ~/.hermes-media/config.yaml）")
@@ -98,6 +121,7 @@ def main(argv: list[str] | None = None) -> int:
     i.add_argument("-n", "--negative", default=None)
     i.add_argument("--seed", type=int, default=None)
     i.add_argument("--count", type=int, default=1)
+    i.add_argument("-m", "--model", default=None, help="出图模型名或 id")
 
     t = sub.add_parser("tts", help="配音")
     t.add_argument("text")
@@ -106,6 +130,10 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("-a", "--alpha", type=float, default=None)
 
     sub.add_parser("presets", help="列出风格 / 音色 / 情绪预设")
+    sub.add_parser("models", help="列出出图模型")
+    d = sub.add_parser("download", help="下载出图模型")
+    d.add_argument("model_id")
+    d.add_argument("--source", choices=list(SOURCES), default=None)
     sub.add_parser("doctor", help="检查后端连通性")
 
     args = p.parse_args(argv)
@@ -124,9 +152,18 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.cmd == "image":
             r = asyncio.run(ImageGenerator(cfg, WorkerManager(cfg)).generate(
-                args.prompt, args.ratio, args.negative, args.seed, args.count, style=args.style))
+                args.prompt, args.ratio, args.negative, args.seed, args.count, style=args.style, model=args.model))
         elif args.cmd == "tts":
             r = asyncio.run(TTSGenerator(cfg, WorkerManager(cfg)).speak(args.text, args.voice, args.emotion, args.alpha))
+        elif args.cmd == "models":
+            reg = ModelRegistry(cfg)
+            print(f"模型目录: {reg.models_dir}")
+            for e in reg.entries():
+                state = "可用" if e.installed else ("可下载" if e.sources else "不可用")
+                print(f"  [{state}] {e.id:34} {e.name}")
+            return 0
+        elif args.cmd == "download":
+            return _download(cfg, args.model_id, args.source)
         elif args.cmd == "presets":
             p = Presets.load(cfg)
             print("风格: " + "、".join(s.name for s in p.styles))

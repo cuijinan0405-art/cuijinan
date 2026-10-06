@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from .backends import ImageGenerator, Result, TTSGenerator
 from .config import Config
+from .models import ModelRegistry
 from .presets import Presets
 from .workers import WorkerManager
 
@@ -41,7 +42,7 @@ def build_server(cfg: Config | None = None):
 
     @mcp.tool()
     async def generate_image(prompt: str, style: str = "", ratio: str = "", negative_prompt: str = "",
-                             seed: int = -1, count: int = 1) -> str:
+                             seed: int = -1, count: int = 1, model: str = "") -> str:
         """用本地千问 Qwen-Image 2.1 生成图片，返回图片文件路径。
 
         Args:
@@ -51,9 +52,10 @@ def build_server(cfg: Config | None = None):
             negative_prompt: 不想出现的内容，可留空。
             seed: 随机种子，-1 表示随机；想复现上一张图时传入上次的种子。
             count: 生成几张（1~8）。
+            model: 出图模型名（见 list_styles 末尾的可用模型），留空用默认模型。用户没指定就留空。
         """
         r = await images.generate(prompt, ratio or None, negative_prompt or None,
-                                  None if seed < 0 else seed, count, style=style or None)
+                                  None if seed < 0 else seed, count, style=style or None, model=model or None)
         return _format(r, "出图")
 
     @mcp.tool()
@@ -83,11 +85,13 @@ def build_server(cfg: Config | None = None):
 
     @mcp.tool()
     async def list_styles() -> str:
-        """列出出图的预设风格（按分类）。"""
+        """列出出图的预设风格（按分类）和可用的出图模型。"""
         groups: dict[str, list[str]] = {}
         for s in Presets.load(cfg).styles:
             groups.setdefault(s.category or "其它", []).append(f"{s.name}({s.ratio or cfg.image['default_ratio']})")
-        return "预设风格（括号里是推荐画幅）：\n" + "\n".join(f"- {k}：{'、'.join(v)}" for k, v in groups.items())
+        models = "、".join(m.name for m in ModelRegistry(cfg).available())
+        return ("预设风格（括号里是推荐画幅）：\n" + "\n".join(f"- {k}：{'、'.join(v)}" for k, v in groups.items())
+                + f"\n可用出图模型：{models}")
 
     return mcp
 

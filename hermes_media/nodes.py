@@ -15,6 +15,7 @@ from typing import Any, Awaitable, Callable
 
 from .backends import ImageGenerator, TTSGenerator
 from .config import Config
+from .models import ModelRegistry
 from .presets import Presets
 
 FOLLOW = "跟随风格"
@@ -91,12 +92,12 @@ async def _style(ctx, style="", subject="", **_):
     return (prompt, neg, st.ratio or ctx.cfg.image["default_ratio"]), {"text": prompt}
 
 
-async def _qwen_image(ctx, prompt="", negative=None, ratio_in=None, ratio=FOLLOW, steps=50, cfg=4.0,
+async def _qwen_image(ctx, prompt="", negative=None, ratio_in=None, model=None, ratio=FOLLOW, steps=50, cfg=4.0,
                       seed=-1, count=1, **_):
     use_ratio = ratio_in if ratio == FOLLOW else ratio
     r = await ctx.images.generate(prompt, use_ratio or None, negative, int(seed), int(count),
-                                  steps=int(steps), cfg_scale=float(cfg))
-    return (r.files,), {"seeds": r.info.get("seeds"), "size": r.info.get("size")}
+                                  steps=int(steps), cfg_scale=float(cfg), model=model or None)
+    return (r.files,), {"seeds": r.info.get("seeds"), "size": r.info.get("size"), "model": model}
 
 
 async def _preview_image(ctx, images=None, **_):
@@ -129,6 +130,12 @@ def build_nodes(cfg: Config) -> dict[str, NodeDef]:
     styles = [s.name for s in presets.styles]
     voices = [v.name for v in presets.voices()] or ["（还没有音色）"]
     emotions = [e.name for e in presets.emotions]
+    reg = ModelRegistry(cfg)
+    models = [m.name for m in reg.available()]
+    try:
+        default_model = reg.get(None).name
+    except ValueError:
+        default_model = models[0]
     defs = [
         NodeDef("TextInput", "文本", "输入", "#355", _text,
                 outputs=[Port("text", "文本", "STRING")],
@@ -144,7 +151,8 @@ def build_nodes(cfg: Config) -> dict[str, NodeDef]:
                 inputs=[Port("prompt", "提示词", "STRING"), Port("negative", "反向词", "STRING", True),
                         Port("ratio_in", "画幅", "RATIO", True)],
                 outputs=[Port("images", "图片", "IMAGE")],
-                widgets=[Widget("ratio", "画幅", "combo", FOLLOW, [FOLLOW] + ratios),
+                widgets=[Widget("model", "模型", "combo", default_model, models),
+                         Widget("ratio", "画幅", "combo", FOLLOW, [FOLLOW] + ratios),
                          Widget("steps", "步数", "int", int(cfg.image["steps"]), min=1, max=100, step=1),
                          Widget("cfg", "CFG", "float", float(cfg.image["cfg"]), min=1, max=10, step=0.5),
                          Widget("seed", "种子(-1随机)", "int", -1, min=-1, max=2**31 - 1, step=1),

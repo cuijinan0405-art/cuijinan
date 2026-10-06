@@ -1,0 +1,43 @@
+# 出图模型目录：界面「模型管理」里可以一键下载，下载完就出现在「千问 Image 2.1」节点的「模型」下拉框里。
+#
+# 说明：千问 Image 2.1 官方权重在本地运行时本身没有内容过滤（过滤只存在于阿里云在线服务）。
+# 社区标着 "Uncensored" 的版本大多是同一份权重的量化版，主要好处是省显存。
+#
+# kind:
+#   pipeline     完整的 diffusers 模型目录（含 model_index.json）
+#   transformer  只替换扩散模型（.gguf / .safetensors 单文件），文本编码器和 VAE 用 base 指定的模型
+#   text_encoder 只替换文本编码器（transformers 目录），其余用 base
+# sources: huggingface / modelscope 仓库名；files: 只下载匹配的文件（通配符）
+
+- id: qwen-image-2.1
+  name: 千问 Image 2.1 官方版
+  kind: pipeline
+  desc: 官方完整权重（BF16，7B 扩散模型 + Qwen3-VL 8B 文本编码器），其它变体都需要先下它。约 30GB。
+  sources:
+    huggingface: Qwen/Qwen-Image-2.1
+    modelscope: Qwen/Qwen-Image-2.1
+
+- id: qwen-image-2.1-uncensored-q8
+  name: 千问 Image 2.1 Uncensored · GGUF Q8（社区）
+  kind: transformer
+  base: qwen-image-2.1
+  desc: 社区量化版，权重与官方相同，扩散模型约 7.6GB，画质几乎无损。需要较新的 diffusers 和 gguf 包。
+  files: ["*Q8_0*.gguf"]
+  sources:
+    huggingface: 0xSojalSec/Qwen-Image-2.1-Uncensored-GGUF
+
+- id: qwen-image-2.1-uncensored-q4
+  name: 千问 Image 2.1 Uncensored · GGUF Q4_K_M（社区）
+  kind: transformer
+  base: qwen-image-2.1
+  desc: 社区量化版，扩散模型约 4.6GB，适合小显存，画质略有损失。
+  files: ["*Q4_K_M*.gguf"]
+  sources:
+    huggingface: 0xSojalSec/Qwen-Image-2.1-Uncensored-GGUF
+
+- id: qwen-image-2.1-uncensored-hf
+  name: 千问 Image 2.1 Uncensored · 完整版（社区）
+  kind: pipeline
+  desc: 社区上传的完整模型目录（未经本项目验证）。如果下载后加载失败，说明它不是 diffusers 格式，请改用上面的版本。
+  sources:
+    huggingface: 0xSojalSec/Qwen-Image-2.1-Uncensored-HF

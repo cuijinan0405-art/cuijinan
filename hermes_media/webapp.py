@@ -20,6 +20,8 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from .backends import ImageGenerator, TTSGenerator
 from .config import Config
+from .downloads import SOURCES, DownloadManager
+from .models import ModelRegistry
 from .nodes import Job, build_nodes, emotion_alphas, execute
 from .presets import AUDIO_EXTS, Presets
 from .workers import WorkerManager
@@ -35,6 +37,7 @@ class App:
         self.workers = workers or WorkerManager(cfg)
         self.images = images or ImageGenerator(cfg, self.workers)
         self.tts = tts or TTSGenerator(cfg, self.workers)
+        self.downloads = DownloadManager(cfg)
         self.jobs: dict[str, Job] = {}
         self.queue: queue.Queue = queue.Queue()
         threading.Thread(target=self._runner, daemon=True).start()
@@ -65,6 +68,16 @@ class App:
                         "source": v.source, "url": f"/api/voices/audio?name={quote(v.name)}" if v.available else None}
                        for v in p.voices(include_missing=True)],
         }
+
+    def models(self) -> dict:
+        reg = ModelRegistry(self.cfg)
+        try:
+            current = reg.get(None).id
+        except ValueError:
+            current = "default"
+        return {"entries": [e.to_json() for e in reg.entries()], "tasks": self.downloads.status(),
+                "sources": SOURCES, "models_dir": str(reg.models_dir), "default_model": current,
+                "default_source": self.cfg.image.get("download_source") or "huggingface"}
 
     def status(self) -> dict:
         st = {"image_backend": self.cfg.image["backend"], "tts_backend": self.cfg.tts["backend"],
@@ -146,6 +159,8 @@ def make_handler(app: App):
                     return self._file(_safe_file(app.cfg.output_dir, path[len("/files/"):]))
                 if path == "/api/nodes":
                     return self._json(app.node_info())
+                if path == "/api/models":
+                    return self._json(app.models())
                 if path == "/api/status":
                     return self._json(app.status())
                 if path == "/api/history":
@@ -168,6 +183,9 @@ def make_handler(app: App):
                     body = json.loads(self._body() or b"{}")
                     job = app.submit(body.get("graph") or {})
                     return self._json({"job_id": job.id})
+                if u.path == "/api/models/download":
+                    body = json.loads(self._body() or b"{}")
+                    return self._json(app.downloads.start(body.get("id", ""), body.get("source")).to_json())
                 if u.path == "/api/voices/upload":
                     q = parse_qs(u.query)
                     name = app.save_voice(q.get("name", [""])[0], q.get("ext", [".wav"])[0], self._body())

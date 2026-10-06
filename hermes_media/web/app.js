@@ -3,7 +3,7 @@
   "use strict";
 
   const $ = (s) => document.querySelector(s);
-  const STORE_KEY = "hermes-media-graph-v1";
+  const STORE_KEY = "hermes-media-graph-v2";
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch { /* 隐私模式等 */ } },
@@ -25,6 +25,7 @@
   const graph = new LGraph();
   const canvasEl = $("#graph");
   const canvas = new LGraphCanvas(canvasEl, graph);
+  window.hm = { graph, canvas };  // 方便在浏览器控制台调试
   canvas.render_canvas_border = false;
   canvas.show_info = false;
   canvas.allow_searchbox = true;
@@ -486,7 +487,8 @@
         const backend = s[key + "_backend"];
         const w = s.workers[key];
         if (!w) { pills.push(pill(label[key], "ready", `后端：${backend}`)); continue; }
-        pills.push(pill(label[key], w.state, (STATE_TEXT[w.state] || w.state) + (w.error ? "：" + w.error : "")));
+        const model = key === "image" && w.model_id ? `（${w.model_id}）` : "";
+        pills.push(pill(label[key], w.state, (STATE_TEXT[w.state] || w.state) + model + (w.error ? "：" + w.error : "")));
       }
       $("#status").innerHTML = pills.join("");
       if (s.progress && running) {
@@ -500,9 +502,98 @@
     return `<span class="pill" title="${esc(title)}"><span class="dot ${esc(state)}"></span>${esc(name)}</span>`;
   }
 
+  // ---------------------------------------------------------------- 模型管理
+  const fmtGB = (b) => (b / 1024 ** 3).toFixed(b > 10 * 1024 ** 3 ? 0 : 1) + " GB";
+
+  async function openModels() {
+    const wrap = document.createElement("div");
+    wrap.innerHTML = `<div class="models-head">下载源
+        <select id="msource"></select>
+        <span id="mdir"></span></div>
+      <div class="model-list" id="mlist">加载中…</div>
+      <div class="tip">下载完成后在「千问 Image 2.1」节点的「模型」下拉框里选择；切换模型会自动重新加载（需要一点时间）。
+        国内网络建议选「HF 国内镜像」或「ModelScope 魔搭」。</div>`;
+    let timer = null, firstRender = true;
+    const render = async () => {
+      let data;
+      try { data = await api("/api/models"); } catch (e) { wrap.querySelector("#mlist").textContent = e.message; return; }
+      const sel = wrap.querySelector("#msource");
+      if (firstRender) {
+        sel.innerHTML = Object.entries(data.sources).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
+        sel.value = store.get("hm-source") || data.default_source;
+        sel.onchange = () => store.set("hm-source", sel.value);
+        wrap.querySelector("#mdir").textContent = "保存到 " + data.models_dir;
+        firstRender = false;
+      }
+      const list = wrap.querySelector("#mlist");
+      list.innerHTML = "";
+      let anyRunning = false;
+      for (const m of data.entries) {
+        const t = data.tasks[m.id];
+        const row = document.createElement("div");
+        row.className = "model-row";
+        const top = document.createElement("div");
+        top.className = "top";
+        const name = document.createElement("div");
+        name.className = "name";
+        name.textContent = m.name + (m.id === data.default_model ? "（默认）" : "");
+        top.appendChild(name);
+        if (t && t.state === "running") {
+          anyRunning = true;
+          const tag = document.createElement("span");
+          tag.className = "tag";
+          tag.textContent = t.total ? `下载中 ${fmtGB(t.downloaded)} / ${fmtGB(t.total)}` : `下载中 ${fmtGB(t.downloaded)}`;
+          top.appendChild(tag);
+        } else if (m.installed) {
+          const tag = document.createElement("span");
+          tag.className = "tag ok";
+          tag.textContent = "✓ 可用";
+          top.appendChild(tag);
+        } else if (m.downloadable) {
+          const btn = document.createElement("button");
+          btn.className = "small";
+          btn.textContent = t && t.state === "error" ? "重试" : "下载";
+          btn.onclick = async () => {
+            try {
+              await api("/api/models/download", { method: "POST", body: JSON.stringify({ id: m.id, source: sel.value }) });
+              render();
+            } catch (e) { toast(e.message, 6000); }
+          };
+          top.appendChild(btn);
+        }
+        row.appendChild(top);
+        const desc = document.createElement("div");
+        desc.className = "desc";
+        desc.textContent = m.desc + (m.base ? `（需要先下载：${data.entries.find((x) => x.id === m.base)?.name || m.base}）` : "");
+        row.appendChild(desc);
+        if (t && t.state === "running" && t.total) {
+          const bar = document.createElement("div");
+          bar.className = "bar";
+          bar.innerHTML = `<div style="width:${Math.min(100, (100 * t.downloaded) / t.total).toFixed(1)}%"></div>`;
+          row.appendChild(bar);
+        }
+        if (t && t.state === "error") {
+          const err = document.createElement("div");
+          err.className = "err";
+          err.textContent = t.error;
+          row.appendChild(err);
+        }
+        list.appendChild(row);
+      }
+      if (!anyRunning && timer) { clearInterval(timer); timer = null; await refreshDefs(); }
+      if (anyRunning && !timer) timer = setInterval(render, 1500);
+    };
+    render();
+    await modal("模型管理", wrap, "关闭", false);
+    if (timer) clearInterval(timer);
+    await refreshDefs();
+    canvas.setDirty(true, true);
+  }
+
   // ---------------------------------------------------------------- 弹窗 / 工具
-  function modal(title, bodyEl, okText = "确定") {
+  function modal(title, bodyEl, okText = "确定", showCancel = true) {
     return new Promise((resolve) => {
+      $("#modal-cancel").hidden = !showCancel;
       $("#modal-title").textContent = title;
       const body = $("#modal-body");
       body.innerHTML = "";
@@ -625,6 +716,7 @@
     document.querySelectorAll(".tpl").forEach((b) =>
       b.addEventListener("click", () => loadTemplate(b.dataset.tpl)));
     $("#run").addEventListener("click", run);
+    $("#open-models").addEventListener("click", openModels);
     $("#toggle-side").addEventListener("click", () => { $("#side").classList.toggle("hidden"); resize(); });
     $("#refresh-history").addEventListener("click", loadHistory);
     $("#lightbox").addEventListener("click", () => ($("#lightbox").hidden = true));

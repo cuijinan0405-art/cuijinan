@@ -15,6 +15,8 @@ import pytest
 from hermes_media.backends import ImageGenerator, TTSGenerator
 from hermes_media.comfyui import apply_params, autodetect, parse_title, resolve_specs
 from hermes_media.config import DEFAULTS, Config, _deep_merge
+from hermes_media.downloads import DownloadManager
+from hermes_media.models import ModelRegistry
 from hermes_media.nodes import Job, build_nodes, execute
 from hermes_media.presets import Presets
 from hermes_media.workers import WorkerManager
@@ -41,6 +43,10 @@ def make_cfg(tmp_path: Path, **override) -> Config:
 
 class FakeWorkers:
     """不起进程，直接返回假地址（配合 httpx.MockTransport）。"""
+
+    def image_ready(self, model=None):
+        self.last_model = model
+        return "http://image.test"
 
     class _W:
         def __init__(self, url):
@@ -228,6 +234,7 @@ def test_node_definitions(tmp_path):
     nodes = build_nodes(make_cfg(tmp_path))
     assert {"TextInput", "StylePreset", "QwenImage", "PreviewImage", "VoicePreset", "EmotionPreset",
             "IndexTTS2", "PreviewAudio"} == set(nodes)
+    assert nodes["QwenImage"].to_json()["widgets"][0]["options"] == ["配置文件里的模型"]
     style_widget = nodes["StylePreset"].to_json()["widgets"][0]
     assert "国风水墨" in style_widget["options"]
     json.dumps([n.to_json() for n in nodes.values()], ensure_ascii=False)
@@ -284,7 +291,7 @@ def test_workers_autostart_and_generate(live_cfg):
     payload = json.loads(tts.files[0].read_bytes()[4:])
     assert payload["text"] == "你好世界" and payload["use_emo_text"] and "悲伤" in payload["emo_text"]
     assert workers.status() == {"image": {"state": "ready", "error": None, "progress": None,
-                                          "model": "fake/qwen (DiffusionPipeline)"},
+                                          "model": "fake/qwen (DiffusionPipeline)", "model_id": "default"},
                                 "tts": {"state": "ready", "error": None, "version": "2"}}
 
 
@@ -339,6 +346,89 @@ def test_web_api_end_to_end(live_cfg):
             assert c.get("/api/status").json()["workers"]["image"]["state"] == "ready"
     finally:
         server.shutdown()
+
+
+# ----------------------------------------------------------------------------- 模型下载 / 切换
+
+
+@pytest.fixture
+def fake_hub(monkeypatch):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("huggingface_hub", STUBS / "huggingface_hub" / "__init__.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    monkeypatch.setitem(sys.modules, "huggingface_hub", mod)
+    return mod
+
+
+def wait_download(dm, model_id):
+    for _ in range(100):
+        t = dm.tasks[model_id]
+        if t.state != "running":
+            return t
+        time.sleep(0.05)
+    raise AssertionError("download did not finish")
+
+
+def test_download_and_resolve_models(tmp_path, fake_hub):
+    cfg = make_cfg(tmp_path)
+    reg = ModelRegistry(cfg)
+    assert [e.id for e in reg.available()] == ["default"]
+    with pytest.raises(ValueError, match="还没下载"):
+        reg.get("qwen-image-2.1-uncensored-q8")
+
+    dm = DownloadManager(cfg)
+    t = wait_download(dm, dm.start("qwen-image-2.1-uncensored-q8", "hf-mirror").model_id)
+    assert t.state == "done" and t.total == 1024
+    with pytest.raises(ValueError, match="基础模型"):
+        reg.load_spec("qwen-image-2.1-uncensored-q8")  # 量化版要先有官方版
+
+    t = wait_download(dm, dm.start("qwen-image-2.1").model_id)
+    assert t.state == "done" and t.total == t.downloaded - len((reg.models_dir / "qwen-image-2.1" / ".hm_complete").read_bytes())
+    assert fake_hub.CALLS[0][1] == "https://hf-mirror.com" and fake_hub.CALLS[1][1] is None
+
+    entry, spec = reg.load_spec("千问 Image 2.1 Uncensored · GGUF Q8（社区）")
+    assert spec.model == str(reg.models_dir / "qwen-image-2.1")
+    assert spec.transformer.endswith("qwen-image-2.1-Q8_0.gguf")  # 只下了匹配的文件
+    assert not list((reg.models_dir / "qwen-image-2.1-uncensored-q8").glob("*Q4*"))
+    assert {e.name for e in reg.available()} >= {"千问 Image 2.1 官方版", entry.name}
+
+    # 配置里的模型目录不存在时，自动用已下载的官方版
+    cfg.data["image"]["local"]["model"] = str(tmp_path / "nope")
+    assert ModelRegistry(cfg).get(None).id == "qwen-image-2.1"
+
+    t = wait_download(dm, dm.start("qwen-image-2.1-uncensored-hf").model_id)
+    assert t.state == "error" and "Not Found" in t.error
+
+
+def test_custom_models_in_config(tmp_path):
+    lora = tmp_path / "style.safetensors"
+    lora.write_bytes(b"x")
+    cfg = make_cfg(tmp_path, image={"models": [{"name": "我的模型", "model": "Qwen/Qwen-Image-2.1",
+                                                 "lora": "style.safetensors", "lora_scale": 0.8}],
+                                    "default_model": "我的模型"})
+    entry, spec = ModelRegistry(cfg).load_spec(None)
+    assert entry.name == "我的模型" and spec.model == "Qwen/Qwen-Image-2.1"
+    assert spec.args() == ["--model", "Qwen/Qwen-Image-2.1", "--lora", str(lora), "--lora-scale", "0.8"]
+    nodes = build_nodes(cfg)
+    model_widget = nodes["QwenImage"].to_json()["widgets"][0]
+    assert model_widget["default"] == "我的模型" and "配置文件里的模型" in model_widget["options"]
+
+
+def test_switch_image_model_live(live_cfg, fake_hub):
+    cfg, workers = live_cfg
+    dm = DownloadManager(cfg)
+    for mid in ("qwen-image-2.1", "qwen-image-2.1-uncensored-q8"):
+        assert wait_download(dm, dm.start(mid).model_id).state == "done"
+    gen = ImageGenerator(cfg, workers)
+    asyncio.run(gen.generate("猫", seed=1))
+    assert workers["image"].health()["model_id"] == "default"
+    r = asyncio.run(gen.generate("猫", seed=1, model="qwen-image-2.1-uncensored-q8"))
+    assert r.files[0].read_bytes().startswith(b"\x89PNG")
+    assert workers["image"].health()["model_id"] == "qwen-image-2.1-uncensored-q8"
+    log = workers["image"].log_path.read_text(encoding="utf-8")
+    assert "替换扩散模型" in log and "gguf=True" in log and "parts=['transformer']" in log
 
 
 def test_mcp_server_tools(tmp_path):
