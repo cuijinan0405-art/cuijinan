@@ -1,10 +1,11 @@
 """命令行入口。
 
-  hermes-media serve                     # 启动 MCP 服务（给 Hermes 用）
-  hermes-media image "一只橘猫" -r 16:9    # 直接出图
-  hermes-media tts "你好呀" -v 女声 -e 开心  # 直接配音
-  hermes-media voices                    # 列出音色
-  hermes-media doctor                    # 检查各后端是否连得上
+  hermes-media ui                            # 打开节点画布界面（浏览器）
+  hermes-media serve                         # 启动 MCP 服务（给 Hermes 用）
+  hermes-media image "一只橘猫" -s 日系动漫     # 直接出图
+  hermes-media tts "你好呀" -v 温柔女声 -e 开心  # 直接配音
+  hermes-media presets                       # 列出风格 / 音色 / 情绪预设
+  hermes-media doctor                        # 检查配置和模型状态
 """
 
 from __future__ import annotations
@@ -12,17 +13,20 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from pathlib import Path
 
 import httpx
 
 from .backends import ImageGenerator, TTSGenerator
 from .config import Config, find_config_file
+from .presets import Presets
+from .workers import WorkerManager
 
 
 async def _doctor(cfg: Config) -> int:
     ok = True
     file = find_config_file()
-    print(f"配置文件: {file or '未找到，使用内置默认值'}")
+    print(f"配置文件: {file or '未找到，使用内置默认值（复制 config.example.yaml 为 config.yaml 来修改）'}")
     print(f"输出目录: {cfg.output_dir}")
 
     async def check(name: str, url: str):
@@ -35,26 +39,42 @@ async def _doctor(cfg: Config) -> int:
             ok = False
             print(f"  [失败] {name}: {url} -> {e.__class__.__name__}: {e}")
 
+    workers = WorkerManager(cfg)
     img = cfg.image
     print(f"出图后端: {img['backend']}")
-    if img["backend"] == "comfyui":
+    if img["backend"] == "local":
+        w = workers["image"]
+        print(f"  模型: {img['local']['model']}")
+        print(f"  启动命令: {' '.join(w.argv)}")
+        print(f"  状态: {w.status()['state']}（用到时自动启动；日志 {w.log_path}）")
+    elif img["backend"] == "comfyui":
         await check("ComfyUI", img["comfyui"]["url"].rstrip("/") + "/system_stats")
-        wf = cfg.resolve_path(img["comfyui"]["workflow"])
-        print(f"  {'[OK] ' if wf.is_file() else '[缺失]'} 工作流: {wf}")
-        ok &= wf.is_file()
     else:
         await check("OpenAI 兼容出图", img["openai"]["base_url"].rstrip("/") + "/models")
 
     t = cfg.tts
     print(f"配音后端: {t['backend']}")
-    if t["backend"] == "indextts2":
-        await check("IndexTTS2 服务", t["indextts2"]["url"].rstrip("/") + "/health")
+    if t["backend"] == "local":
+        d = t["local"].get("index_tts_dir")
+        w = workers["tts"]
+        if not d:
+            ok = False
+            print("  [缺失] tts.local.index_tts_dir 没填（你本地 index-tts 的目录）")
+        else:
+            exists = (Path(d).expanduser() / "indextts").is_dir()
+            ok &= exists
+            print(f"  {'[OK] ' if exists else '[失败]'} IndexTTS 目录: {d}")
+            print(f"  启动命令: {' '.join(w.argv)}  (在 {d} 下执行)")
+            print(f"  状态: {w.status()['state']}")
     elif t["backend"] == "comfyui":
         await check("ComfyUI", t["comfyui"]["url"].rstrip("/") + "/system_stats")
     else:
         await check("OpenAI 兼容配音", t["openai"]["base_url"].rstrip("/") + "/models")
-    voices = TTSGenerator(cfg).list_voices()
-    print(f"  音色: {', '.join(v.stem for v in voices) or '（空，请往 voices 目录放参考音频）'}")
+    p = Presets.load(cfg)
+    print(f"预设: {len(p.styles)} 种风格，{len(p.voices())} 个可用音色，{len(p.emotions)} 种情绪")
+    missing = [v for v in p.voices(include_missing=True) if not v.available]
+    if missing:
+        print("  这些预设音色还缺参考音频（放进去就能用）: " + "、".join(f"{v.name} → {v.file}" for v in missing))
     return 0 if ok else 1
 
 
@@ -63,14 +83,20 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("-c", "--config", help="配置文件路径（默认 ./config.yaml 或 ~/.hermes-media/config.yaml）")
     sub = p.add_subparsers(dest="cmd", required=True)
 
+    u = sub.add_parser("ui", help="打开节点画布界面")
+    u.add_argument("--host", default=None)
+    u.add_argument("--port", type=int, default=None)
+    u.add_argument("--no-browser", action="store_true")
+
     s = sub.add_parser("serve", help="启动 MCP 服务")
     s.add_argument("--transport", default="stdio", choices=["stdio", "streamable-http", "sse"])
 
     i = sub.add_parser("image", help="出图")
     i.add_argument("prompt")
+    i.add_argument("-s", "--style", default=None, help="预设风格名")
     i.add_argument("-r", "--ratio", default=None)
     i.add_argument("-n", "--negative", default=None)
-    i.add_argument("-s", "--seed", type=int, default=None)
+    i.add_argument("--seed", type=int, default=None)
     i.add_argument("--count", type=int, default=1)
 
     t = sub.add_parser("tts", help="配音")
@@ -79,10 +105,15 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("-e", "--emotion", default=None)
     t.add_argument("-a", "--alpha", type=float, default=None)
 
-    sub.add_parser("voices", help="列出音色")
+    sub.add_parser("presets", help="列出风格 / 音色 / 情绪预设")
     sub.add_parser("doctor", help="检查后端连通性")
 
     args = p.parse_args(argv)
+
+    if args.cmd == "ui":
+        from .webapp import serve as serve_ui
+        serve_ui(Config.load(args.config), args.host, args.port, False if args.no_browser else None)
+        return 0
 
     if args.cmd == "serve":
         from .server import main as serve
@@ -92,12 +123,15 @@ def main(argv: list[str] | None = None) -> int:
     cfg = Config.load(args.config)
     try:
         if args.cmd == "image":
-            r = asyncio.run(ImageGenerator(cfg).generate(args.prompt, args.ratio, args.negative, args.seed, args.count))
+            r = asyncio.run(ImageGenerator(cfg, WorkerManager(cfg)).generate(
+                args.prompt, args.ratio, args.negative, args.seed, args.count, style=args.style))
         elif args.cmd == "tts":
-            r = asyncio.run(TTSGenerator(cfg).speak(args.text, args.voice, args.emotion, args.alpha))
-        elif args.cmd == "voices":
-            for v in TTSGenerator(cfg).list_voices():
-                print(v.stem)
+            r = asyncio.run(TTSGenerator(cfg, WorkerManager(cfg)).speak(args.text, args.voice, args.emotion, args.alpha))
+        elif args.cmd == "presets":
+            p = Presets.load(cfg)
+            print("风格: " + "、".join(s.name for s in p.styles))
+            print("音色: " + ("、".join(v.name for v in p.voices()) or "（空）"))
+            print("情绪: " + "、".join(e.name for e in p.emotions))
             return 0
         else:
             return asyncio.run(_doctor(cfg))

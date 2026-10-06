@@ -1,34 +1,47 @@
-# 复制为 config.yaml（或 ~/.hermes-media/config.yaml）后按你的本地环境修改。
+# 复制为 config.yaml 后改 3 个地方就能用（带 ★ 的）。
 # 相对路径以本文件所在目录为基准。
 
 output_dir: ~/hermes-media-output   # 生成的图片 / 音频都放这里
 
+web:
+  port: 8765            # 界面地址 http://127.0.0.1:8765
+  open_browser: true    # 启动后自动打开浏览器
+  preload: true         # 启动界面时就在后台加载两个模型，第一次出图/配音不用等
+
 image:
-  backend: comfyui            # comfyui | openai
-  comfyui:
-    url: http://127.0.0.1:8188
-    # 在 ComfyUI 里打开你能跑通的千问 Image 2.1 工作流 → 菜单「导出 (API)」→ 保存到这里
-    # 节点不需要改标题也能用（会自动识别提示词/种子/尺寸），想精确控制可参考示例里的 $prompt.text! 写法
-    workflow: workflows/qwen_image_2_1_api.json
-    timeout: 600
-  openai:                     # 如果你的千问 Image 是 OpenAI 兼容接口（/v1/images/generations）
-    base_url: http://127.0.0.1:8000/v1
-    api_key: ""
-    model: qwen-image-2.1
-  default_ratio: "1:1"        # 1:1 16:9 9:16 4:3 3:4 3:2 2:3
-  negative_prompt: ""
+  backend: local        # local：直接跑千问 Image 2.1（不需要 ComfyUI）
+  local:
+    # ★1 装好 torch + diffusers 的 Python。可以是 "python"、"uv run python"、
+    #     或者整合包里的完整路径，例如 "D:/qwen-image/python/python.exe"
+    python: python
+    # ★2 千问 Image 2.1 模型：本地目录（推荐）或 HuggingFace 名称
+    model: D:/models/Qwen-Image-2.1
+    device: cuda
+    dtype: bfloat16
+    offload: false      # 显存不够（<40G）时改成 true，会慢一些
+    port: 7862
+  steps: 50             # 默认步数（界面里每次都能改）
+  cfg: 4.0
+  default_ratio: "1:1"
 
 tts:
-  backend: indextts2          # indextts2 | openai | comfyui
-  indextts2:
-    url: http://127.0.0.1:7861   # tts_server/indextts2_server.py 的地址
-  openai:                     # OpenAI 兼容的 /v1/audio/speech
-    base_url: http://127.0.0.1:8000/v1
-    api_key: ""
-    model: tts-1
-  comfyui:                    # 用 ComfyUI 里的 IndexTTS2 节点；工作流需标注 $text.text! 和 $voice.~audio
-    url: http://127.0.0.1:8188
-    workflow: workflows/indextts2_api.json
-  voices_dir: voices          # 参考音色目录，文件名即音色名，例如 voices/旁白男声.wav
-  default_voice: ""           # 留空则用目录里第一个
-  emo_alpha: 0.6              # 指定情绪时的默认强度
+  backend: local        # local：直接跑 IndexTTS2（不需要 ComfyUI）
+  local:
+    # ★3 你本地 index-tts 仓库 / 整合包的目录（里面有 indextts/ 和 checkpoints/）
+    index_tts_dir: D:/index-tts
+    # 在上面目录里运行 Python 的方式：官方仓库用 "uv run python"；
+    # 整合包一般写它自带的 python，例如 "D:/index-tts/python/python.exe"
+    python: uv run python
+    model_dir: checkpoints
+    version: "2"        # IndexTTS2.5 改成 "2.5"
+    port: 7861
+  voices_dir: voices    # 参考音色目录（界面里「上传音色」也存到这里）
+  default_voice: ""     # 留空 = 列表第一个
+
+# 风格 / 音色 / 情绪预设在 presets/ 目录下的 YAML 里，随便改，刷新界面就生效。
+presets_dir: presets
+
+# ---- 下面是可选的其它后端，一般用不到 ----
+# image.backend: openai   → 任何 OpenAI 兼容出图接口（/v1/images/generations）
+# image.backend: comfyui  → 已有 ComfyUI 时，用 workflows/ 里导出的 API 工作流
+# tts.backend:   openai   → OpenAI 兼容的 /v1/audio/speech

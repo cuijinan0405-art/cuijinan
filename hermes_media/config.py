@@ -15,6 +15,8 @@ from typing import Any
 
 import yaml
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
 # 千问 Qwen-Image 官方推荐的分辨率（2.1 沿用同一套）
 QWEN_IMAGE_SIZES: dict[str, tuple[int, int]] = {
     "1:1": (1328, 1328),
@@ -28,8 +30,21 @@ QWEN_IMAGE_SIZES: dict[str, tuple[int, int]] = {
 
 DEFAULTS: dict[str, Any] = {
     "output_dir": "~/hermes-media-output",
+    "web": {"host": "127.0.0.1", "port": 8765, "open_browser": True, "preload": True},
     "image": {
-        "backend": "comfyui",  # comfyui | openai
+        "backend": "local",  # local（直接跑模型，不需要 ComfyUI）| openai | comfyui
+        "local": {
+            # 装好 torch + diffusers 的 Python；可以写 "uv run python"、整合包里的 python.exe 等
+            "python": "python",
+            "cwd": "",
+            "model": "Qwen/Qwen-Image-2.1",  # HuggingFace 名称或本地模型目录
+            "device": "cuda",
+            "dtype": "bfloat16",
+            "offload": False,  # 显存不够时设为 true
+            "port": 7862,
+            "startup_timeout": 1800,
+            "timeout": 1200,
+        },
         "comfyui": {
             "url": "http://127.0.0.1:8188",
             "workflow": "workflows/qwen_image_2_1_api.json",
@@ -42,14 +57,21 @@ DEFAULTS: dict[str, Any] = {
             "timeout": 600,
         },
         "default_ratio": "1:1",
-        "negative_prompt": "",
+        "steps": 50,
+        "cfg": 4.0,
+        "negative_prompt": "低分辨率，低画质，肢体畸形，手指畸形，画面过饱和，蜡像感，人脸无细节，过度光滑，画面具有AI感。构图混乱。文字模糊，扭曲。",
         "sizes": {k: list(v) for k, v in QWEN_IMAGE_SIZES.items()},
     },
     "tts": {
-        "backend": "indextts2",  # indextts2 | openai | comfyui
-        "indextts2": {
-            "url": "http://127.0.0.1:7861",
-            "timeout": 600,
+        "backend": "local",  # local（直接跑 IndexTTS2）| openai | comfyui
+        "local": {
+            "index_tts_dir": "",  # 你本地 index-tts 仓库 / 整合包目录
+            "python": "uv run python",
+            "model_dir": "checkpoints",
+            "version": "2",  # 2 或 2.5
+            "port": 7861,
+            "startup_timeout": 900,
+            "timeout": 900,
         },
         "openai": {
             "base_url": "http://127.0.0.1:8000/v1",
@@ -66,6 +88,7 @@ DEFAULTS: dict[str, Any] = {
         "default_voice": "",
         "emo_alpha": 0.6,
     },
+    "presets_dir": "presets",
 }
 
 
@@ -115,7 +138,9 @@ class Config:
         """相对路径以配置文件所在目录为基准。"""
         path = Path(os.path.expandvars(str(p))).expanduser()
         if not path.is_absolute():
-            path = self.base_dir / path
+            # 先找配置文件旁边，找不到再用项目自带的（presets、workflows 等）
+            local = self.base_dir / path
+            path = local if local.exists() or not (PROJECT_ROOT / path).exists() else PROJECT_ROOT / path
         return path
 
     @property
@@ -131,6 +156,10 @@ class Config:
     @property
     def tts(self) -> dict:
         return self.data["tts"]
+
+    @property
+    def presets_dir(self) -> Path:
+        return self.resolve_path(self.data["presets_dir"])
 
     def image_size(self, ratio: str | None) -> tuple[int, int]:
         sizes = self.image["sizes"]

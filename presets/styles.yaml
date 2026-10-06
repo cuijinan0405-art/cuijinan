@@ -1,0 +1,117 @@
+# 出图风格预设。{prompt} 会被替换成你输入的主题；没写 {prompt} 时主题会放在最前面。
+# 可以随意增删改，界面和 Hermes 里会自动出现。
+# 字段：id（英文唯一）、name（显示名）、category（分组）、prompt、negative（可选，覆盖默认反向词）、ratio（默认画幅）
+
+- id: photo
+  name: 写实摄影
+  category: 摄影
+  ratio: "3:2"
+  prompt: "{prompt}，真实摄影作品，自然光线，85mm 镜头，浅景深，皮肤和材质细节真实，色彩自然，超清，4K"
+
+- id: cinematic
+  name: 电影大片
+  category: 摄影
+  ratio: "16:9"
+  prompt: "{prompt}，电影剧照，宽银幕构图，戏剧性光影，体积光，青橙色调，胶片颗粒，电影级调色，超清，4K"
+
+- id: portrait
+  name: 人像写真
+  category: 摄影
+  ratio: "3:4"
+  prompt: "{prompt}，高级人像写真，柔和的伦勃朗光，干净背景，五官精致自然，眼神有神，杂志封面质感，超清"
+
+- id: product
+  name: 电商产品图
+  category: 商业
+  ratio: "1:1"
+  prompt: "{prompt}，电商产品主图，产品居中，干净的浅色渐变背景，柔和棚拍光，真实反光与阴影，质感高级，商业摄影，超清"
+
+- id: xhs_cover
+  name: 小红书封面
+  category: 商业
+  ratio: "3:4"
+  prompt: "小红书风格封面，{prompt}，明亮清新的配色，画面中有醒目的大号中文标题文字，排版简洁有设计感，吸引眼球"
+
+- id: poster
+  name: 海报设计
+  category: 商业
+  ratio: "2:3"
+  prompt: "{prompt}，平面海报设计，强烈的视觉中心，大标题中文字体清晰准确，层次分明的排版，高级配色，印刷品质"
+
+- id: anime
+  name: 日系动漫
+  category: 插画
+  ratio: "16:9"
+  prompt: "{prompt}，日系动漫风格，新海诚式的光影与天空，清澈通透的色彩，精致线条，赛璐璐上色，高质量动画截图"
+
+- id: guofeng
+  name: 国风水墨
+  category: 插画
+  ratio: "2:3"
+  prompt: "{prompt}，中国传统水墨画风格，宣纸质感，墨色浓淡相宜，大量留白，意境悠远，题字与印章点缀"
+
+- id: watercolor
+  name: 清新水彩
+  category: 插画
+  ratio: "4:3"
+  prompt: "{prompt}，水彩手绘插画，柔和晕染，纸张纹理，清新淡雅的配色，笔触自然"
+
+- id: picture_book
+  name: 儿童绘本
+  category: 插画
+  ratio: "4:3"
+  prompt: "{prompt}，温馨的儿童绘本插画，圆润可爱的造型，柔和明亮的色彩，彩铅与水彩质感，童趣十足"
+
+- id: flat
+  name: 扁平插画
+  category: 插画
+  ratio: "16:9"
+  prompt: "{prompt}，扁平化矢量插画，简洁的几何造型，明快的配色，无多余纹理，适合 PPT 和网页配图"
+
+- id: pixar3d
+  name: 3D 卡通
+  category: 3D
+  ratio: "1:1"
+  prompt: "{prompt}，皮克斯风格 3D 动画渲染，可爱夸张的角色造型，柔和的全局光照，次表面散射，细腻材质，C4D 渲染"
+
+- id: clay
+  name: 黏土定格
+  category: 3D
+  ratio: "1:1"
+  prompt: "{prompt}，黏土定格动画风格，手工黏土质感，可见指纹与细小瑕疵，微缩场景，柔和打光，治愈感"
+
+- id: cyberpunk
+  name: 赛博朋克
+  category: 幻想
+  ratio: "16:9"
+  prompt: "{prompt}，赛博朋克风格，霓虹灯光，雨夜湿润反光的街道，粉紫与青蓝色调，高科技低生活，电影感，超清"
+
+- id: fantasy
+  name: 奇幻概念
+  category: 幻想
+  ratio: "16:9"
+  prompt: "{prompt}，史诗奇幻概念艺术，宏大的场景，壮丽的光线，细节丰富，游戏原画质感，超清"
+
+- id: oil
+  name: 古典油画
+  category: 艺术
+  ratio: "4:3"
+  prompt: "{prompt}，古典油画风格，厚涂笔触，伦勃朗式明暗对比，画布纹理，博物馆藏品质感"
+
+- id: pixel
+  name: 像素游戏
+  category: 艺术
+  ratio: "1:1"
+  prompt: "{prompt}，16-bit 像素艺术，复古游戏画面，清晰的像素点，有限调色板"
+
+- id: avatar
+  name: 头像
+  category: 实用
+  ratio: "1:1"
+  prompt: "{prompt}，头像，主体居中特写，背景简洁，风格统一，适合做社交平台头像"
+
+- id: none
+  name: 不加风格（原样）
+  category: 实用
+  ratio: "1:1"
+  prompt: "{prompt}"

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hermes-media"
 version = "0.1.0"
-description = "让 Hermes Agent 一句话出图（千问 Qwen-Image 2.1）/ 一句话配音（IndexTTS2）的本地 MCP 工具"
+description = "本地出图（千问 Qwen-Image 2.1）/ 配音（IndexTTS2）节点工作台，带 Hermes Agent MCP 接入"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -23,6 +23,9 @@ hermes-media = "hermes_media.cli:main"
 
 [tool.setuptools]
 packages = ["hermes_media"]
+
+[tool.setuptools.package-data]
+hermes_media = ["web/*", "web/vendor/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

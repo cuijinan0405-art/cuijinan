@@ -1,6 +1,6 @@
 """IndexTTS2 常驻 HTTP 服务（只用标准库，模型只加载一次）。
 
-放在 index-tts 仓库的环境里运行（不需要额外装依赖）：
+hermes-media 会按配置自动在 index-tts 目录里启动它；也可以手动跑（不需要额外装依赖）：
 
     cd /path/to/index-tts
     uv run python /path/to/hermes-media/tts_server/indextts2_server.py --model-dir checkpoints --port 7861
@@ -8,7 +8,7 @@
 IndexTTS2.5 加 --version 2.5（可配 --lang ZH/EN）。
 
 接口：
-    GET  /health
+    GET  /health   {"state": "loading" | "ready" | "error"}
     POST /tts   JSON:
         text          要念的文字（必填）
         voice_b64     参考音色音频 base64（或用 voice_path 传服务器本地路径）
@@ -32,9 +32,12 @@ import threading
 import time
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+from _watchdog import watch_parent
 from pathlib import Path
 
 TTS = None
+STATE = {"state": "loading", "error": None}
 LOCK = threading.Lock()  # GPU 推理串行执行
 ARGS: argparse.Namespace
 CACHE = Path(tempfile.gettempdir()) / "hermes_media_voices"
@@ -97,7 +100,22 @@ def synthesize(body: dict) -> bytes:
         Path(out).unlink(missing_ok=True)
 
 
+def load(args: argparse.Namespace) -> None:
+    global TTS
+    try:
+        print(f">> 加载 IndexTTS{args.version} 模型: {args.model_dir}", flush=True)
+        TTS = load_model(args)
+        STATE["state"] = "ready"
+        print(">> 模型就绪", flush=True)
+    except Exception as e:  # noqa: BLE001
+        traceback.print_exc()
+        STATE.update(state="error", error=f"{e.__class__.__name__}: {e}")
+
+
 class Handler(BaseHTTPRequestHandler):
+    def log_message(self, fmt, *args):
+        pass
+
     def _send(self, code: int, body: bytes, ctype: str = "application/json"):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
@@ -110,13 +128,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.rstrip("/") == "/health":
-            self._json(200, {"ok": True, "version": ARGS.version})
+            self._json(200, {**STATE, "version": ARGS.version})
         else:
             self._json(404, {"error": "not found"})
 
     def do_POST(self):
         if self.path.rstrip("/") != "/tts":
             return self._json(404, {"error": "not found"})
+        if STATE["state"] != "ready":
+            return self._json(503, {"error": f"模型还没就绪: {STATE['state']} {STATE['error'] or ''}"})
         try:
             length = int(self.headers.get("Content-Length") or 0)
             body = json.loads(self.rfile.read(length) or b"{}")
@@ -132,19 +152,21 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    global TTS, ARGS
+    global ARGS
     p = argparse.ArgumentParser(description="IndexTTS2 HTTP 服务")
     p.add_argument("--model-dir", default="checkpoints")
     p.add_argument("--version", default="2", choices=["2", "2.5"])
     p.add_argument("--lang", default="ZH", help="IndexTTS2.5 默认语言")
     p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--parent-pid", type=int, default=None, help="该进程退出时自动退出")
     p.add_argument("--port", type=int, default=7861)
     p.add_argument("--no-half", action="store_true", help="不用 fp16/bf16（显卡不支持时）")
     ARGS = p.parse_args()
-    print(f">> 加载 IndexTTS{ARGS.version} 模型: {ARGS.model_dir}", flush=True)
-    TTS = load_model(ARGS)
-    print(f">> 已就绪: http://{ARGS.host}:{ARGS.port}", flush=True)
-    ThreadingHTTPServer((ARGS.host, ARGS.port), Handler).serve_forever()
+    watch_parent(ARGS.parent_pid)
+    server = ThreadingHTTPServer((ARGS.host, ARGS.port), Handler)  # 先开端口，加载时也能查询状态
+    threading.Thread(target=load, args=(ARGS,), daemon=True).start()
+    print(f">> 配音服务: http://{ARGS.host}:{ARGS.port}", flush=True)
+    server.serve_forever()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,48 @@
+# 配音音色预设。
+#
+# 每个音色就是一段 3~10 秒、干净无背景音的参考人声（IndexTTS2 会克隆它的音色）。
+# 把音频放到 file 指定的位置就能在界面里选到；也可以在界面「音色预设」节点上点「上传音色」。
+# voices/ 目录里没写在这里的音频，也会自动出现在列表里（文件名就是音色名）。
+#
+# 字段：id、name（显示名）、file（相对配置文件所在目录，没有配置文件时相对项目根目录；也可写绝对路径）、emotion（默认情绪 id，见 emotions.yaml）、desc
+
+voices:
+  - id: narrator_male
+    name: 旁白·沉稳男声
+    file: voices/旁白男声.wav
+    emotion: calm
+    desc: 纪录片、有声书、知识讲解
+
+  - id: gentle_female
+    name: 温柔女声
+    file: voices/温柔女声.wav
+    emotion: gentle
+    desc: 情感电台、睡前故事、种草口播
+
+  - id: news
+    name: 新闻播报
+    file: voices/新闻播报.wav
+    emotion: serious
+    desc: 资讯、通知、正式场合
+
+  - id: energetic
+    name: 活力带货
+    file: voices/活力带货.wav
+    emotion: excited
+    desc: 直播带货、短视频开场
+
+  - id: child
+    name: 童声
+    file: voices/童声.wav
+    emotion: happy
+    desc: 儿童内容、动画配音
+
+  - id: elder
+    name: 老者
+    file: voices/老者.wav
+    emotion: calm
+    desc: 讲故事、历史类内容
+
+# 配置了 tts.local.index_tts_dir 时，自动把 IndexTTS 自带的 examples/voice_01~12.wav
+# 加进来，显示为「IndexTTS 示例 01」…，开箱就能试。
+include_index_tts_examples: true

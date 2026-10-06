@@ -1,0 +1,15 @@
+# 情绪预设：text 会交给 IndexTTS2 的文本情绪控制（use_emo_text），alpha 是强度（0~1）。
+# id 为 none 表示完全跟随参考音色本身的语气。
+
+- {id: none,      name: 跟随音色,   text: "",                         alpha: 1.0}
+- {id: calm,      name: 平静舒缓,   text: "平静、舒缓、从容地讲述",       alpha: 0.5}
+- {id: happy,     name: 开心,       text: "开心、愉快、带着笑意",          alpha: 0.6}
+- {id: excited,   name: 激动热情,   text: "非常激动、热情高涨、充满感染力", alpha: 0.7}
+- {id: gentle,    name: 温柔,       text: "温柔、轻声细语、充满关怀",       alpha: 0.6}
+- {id: sad,       name: 悲伤,       text: "悲伤、低落、声音有些哽咽",       alpha: 0.65}
+- {id: angry,     name: 生气,       text: "愤怒、生气地质问",              alpha: 0.65}
+- {id: surprised, name: 惊讶,       text: "非常惊讶、难以置信",            alpha: 0.6}
+- {id: scared,    name: 害怕,       text: "害怕、紧张、声音发抖",          alpha: 0.6}
+- {id: mysterious,name: 低沉神秘,   text: "低沉、缓慢、充满悬念和神秘感",   alpha: 0.55}
+- {id: cute,      name: 撒娇可爱,   text: "撒娇、俏皮、可爱",              alpha: 0.6}
+- {id: serious,   name: 严肃播报,   text: "严肃、正式、字正腔圆地播报",     alpha: 0.5}

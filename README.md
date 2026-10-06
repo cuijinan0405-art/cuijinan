@@ -1,153 +1,167 @@
-# hermes-media：Hermes Agent 一句话出图 / 配音
+# hermes-media：本地出图 / 配音工作台
 
-在 Hermes Agent 里直接说一句话，就能调用你**本地**的：
+不用启动 ComfyUI，也能用 **ComfyUI 那样的节点界面**，调用你本地的：
 
-- **千问 Qwen-Image 2.1** 出图（通过 ComfyUI，或任何 OpenAI 兼容的出图接口）
-- **IndexTTS2 / 2.5** 配音（克隆参考音色，可以用一句话控制情绪）
+- **千问 Qwen-Image 2.1** 出图（直接用 diffusers 跑模型）
+- **IndexTTS2 / 2.5** 配音（克隆参考音色，带情绪控制）
 
-```
-/img 一只戴墨镜的橘猫在海边冲浪，赛博朋克风，横版
-/voice 用旁白的声音，低沉地说：故事，要从三十年前说起
-```
+出图和配音的工作流都**预先连好了**，风格、音色、情绪都**做成了下拉框**，选一下、改改文字、点「运行」就出结果。
+同一套预设也接进了 **Hermes Agent**，在聊天里说一句 `/img 江南古镇 国风` 或 `/voice 欢迎收看本期节目` 就能出图 / 配音。
 
-也可以不加斜杠，直接说「帮我画张…」「把这段读出来」，Hermes 会自己调用工具，然后把图片 / 音频直接发给你（CLI、Telegram、微信、飞书等网关都支持）。
+![界面截图](docs/screenshot.png)
 
----
+> 截图里的图片是测试用的假模型生成的色块，接上真模型就是真实出图。
 
-## 一、GitHub 调研结论（2026-10）
+## 一、能做什么
 
-| 项目 | ⭐ | 做了什么 | 是否适合直接用 |
-|---|---|---|---|
-| [ATH-MaaS/Pixelle-MCP](https://github.com/ATH-MaaS/Pixelle-MCP) | ~1.1k | 把 ComfyUI 工作流自动变成 MCP 工具，节点标题写 `$prompt.text!` 就是参数，MIT 协议 | 思路最好，但体量大（自带 Web UI、LLM、多用户），**不针对 Hermes，不管 IndexTTS2** |
-| [artokun/comfyui-mcp](https://github.com/artokun/comfyui-mcp) | ~790 | 178 个工具的 ComfyUI 全功能控制台 | 太重，「几句话出图」用不上这么多工具，反而让模型选错工具 |
-| [jau123/MeiGen-AI-Design-MCP](https://github.com/jau123/MeiGen-AI-Design-MCP) | ~1.8k | 主打云端 GPT Image / Midjourney 等，附带 ComfyUI 模式 | 以云端为主，跟本地千问 + 配音需求不对口 |
-| [ph1lb4/imagegen-mac](https://github.com/ph1lb4/imagegen-mac) 等 | <10 | 本地 Qwen-Image 2.1 + MCP | 只支持 Mac / 星太少 |
-| [1guguo/indextts2-api](https://github.com/1guguo/indextts2-api) 等 | ~30 | IndexTTS2 加 HTTP API | 只有配音，不能直接接 Agent |
+**三个预设工作流**（顶部按钮一键切换，改动会自动保存）：
 
-**结论：没有现成的「Hermes + 本地千问出图 + IndexTTS2 配音」一体化项目，高星项目都太重或者偏云端。**
-所以本项目做法是：**抄 Pixelle-MCP 最好用的部分**——ComfyUI 节点标题 DSL（`$参数.字段!:描述`，语法完全兼容），
-再补上 IndexTTS2 配音、Hermes 的斜杠命令 skill 和 `MEDIA:` 文件回传，整体只有 3 个工具，模型不会选错。
+| 预设 | 连好的节点 |
+|---|---|
+| 🖼 出图 | 文本 → 风格预设 → 千问 Image 2.1 → 预览图片 |
+| 🎙 配音 | 文本 + 音色预设 + 情绪 → IndexTTS2 配音 → 试听 |
+| ✨ 图文同出 | 上面两条一起跑，一次出一张配图 + 一段配音 |
 
-## 二、整体结构
+**内置预设**（都在 `presets/` 下的 YAML 里，可随意增删改，刷新页面就生效）：
 
-```
-你在 Hermes 里说话
-   │  /img、/voice 两个 skill 负责把一句话扩写成好的参数
-   ▼
-Hermes Agent ──MCP(stdio)──▶ hermes-media（本项目）
-                                ├─ generate_image  ──▶ ComfyUI + 千问 Image 2.1 工作流
-                                ├─ text_to_speech  ──▶ tts_server/indextts2_server.py（IndexTTS2 常驻）
-                                └─ list_voices     ──▶ voices/ 目录里的参考音频
-   ◀── 返回 MEDIA:/xxx.png / MEDIA:/xxx.wav，Hermes 自动把文件发给你
-```
+- **19 种出图风格**：写实摄影、电影大片、人像写真、电商产品图、小红书封面、海报设计、日系动漫、国风水墨、清新水彩、儿童绘本、扁平插画、3D 卡通、黏土定格、赛博朋克、奇幻概念、古典油画、像素游戏、头像、不加风格。
+  每种风格自带提示词模板、反向词和推荐画幅（千问官方推荐分辨率）。
+- **12 种情绪**：跟随音色、平静舒缓、开心、激动热情、温柔、悲伤、生气、惊讶、害怕、低沉神秘、撒娇可爱、严肃播报。也可以自己写一句情绪描述。
+- **音色**：
+  - 预留了 6 个音色位：旁白·沉稳男声、温柔女声、新闻播报、活力带货、童声、老者。放一段对应的参考音频就能用。
+  - 也可以在界面上点「＋ 上传音色」添加自己的声音。
+  - 配好 IndexTTS 目录后，它自带的示例音色也会自动出现，开箱就能试。
 
-```
-hermes_media/          MCP 服务 + 命令行
-  comfyui.py           ComfyUI 工作流运行器（DSL 参数注入 + 自动识别提示词/种子/尺寸）
-  backends.py          出图 / 配音后端（comfyui、openai 兼容、indextts2）
-  server.py            MCP 工具定义
-  cli.py               hermes-media 命令
-tts_server/indextts2_server.py   IndexTTS2 常驻服务（纯标准库，放进 index-tts 环境运行）
-workflows/qwen_image_2_1_api.json  千问 Image 2.1 示例工作流（API 格式）
-skills/img、skills/voice           Hermes skill → /img 和 /voice 斜杠命令
-```
+**和 ComfyUI 一样的操作**：
+- 滚轮缩放，拖动空白处平移；从圆点拖线连接；右键或双击空白处添加节点。
+- `Ctrl+Enter` 运行。正在跑的节点有绿框，出错的节点有红框。
+- 任务排队执行，不会抢显卡。
 
-## 三、安装
+## 二、为什么这么做（GitHub 调研）
 
-### 1. 安装本项目
+| 项目 | ⭐ | 结论 |
+|---|---|---|
+| [ATH-MaaS/Pixelle-MCP](https://github.com/ATH-MaaS/Pixelle-MCP) | ~1.1k | ComfyUI 工作流 → MCP 工具，思路最好，但必须跑 ComfyUI |
+| [artokun/comfyui-mcp](https://github.com/artokun/comfyui-mcp) | ~790 | 178 个工具，太重，且依赖 ComfyUI |
+| [jau123/MeiGen-AI-Design-MCP](https://github.com/jau123/MeiGen-AI-Design-MCP) | ~1.8k | 以云端模型为主 |
+| 本地 Qwen-Image 2.1 / IndexTTS2 API 类项目 | <30 | 只管出图或只管配音 |
+
+没有现成的「不跑 ComfyUI、但有 ComfyUI 界面、预设好千问 + IndexTTS2」的项目，所以：
+
+- **界面直接用 ComfyUI 同款画布库** [litegraph.js](https://github.com/jagenjo/litegraph.js)（MIT，已内置，离线可用）。
+- **节点由后端声明、前端自动生成**，这是照搬 ComfyUI 的做法。
+- **两个模型各自常驻一个进程**，模型只加载一次。
+- **ComfyUI 工作流的参数标注语法**沿用 Pixelle-MCP 的写法；这只在可选的 ComfyUI 后端里用到。
+
+## 三、安装（3 步）
+
+### 1. 下载并生成配置
 
 ```bash
 git clone https://github.com/cuijinan0405-art/cuijinan.git hermes-media
 cd hermes-media
-python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
-pip install -e .
-cp config.example.yaml config.yaml
-mkdir -p ~/.hermes-media && cp config.yaml ~/.hermes-media/config.yaml   # 或者用 HERMES_MEDIA_CONFIG 指定
 ```
 
-### 2. 准备千问 Image 2.1 工作流
+- **Windows**：双击 `start.bat`。第一次会自动安装，并用记事本打开 `config.yaml`。
+- **Linux / macOS**：运行 `./start.sh`。
 
-1. 打开 ComfyUI，载入你**已经能正常出图**的千问 Image 2.1 工作流。
-2. 菜单 → 工作流 → **导出 (API)**，保存为 `workflows/qwen_image_2_1_api.json`（覆盖示例文件）。
-3. 不用改任何节点也能用：程序会自动找到采样器连着的正/反提示词、种子和画布尺寸。
-   想精确指定，就把节点标题改成 Pixelle 风格，例如：
-   - 正向提示词节点：`$prompt.text!:正向提示词`
-   - 反向提示词节点：`$negative_prompt.text`
-   - 输出节点：`$output.image`
+### 2. 改 `config.yaml` 里带 ★ 的 3 处
 
-> 如果你的千问 Image 不是 ComfyUI，而是一个 OpenAI 兼容服务（`/v1/images/generations`），把 `image.backend` 改成 `openai` 并填 `base_url` 即可。
-
-### 3. 启动 IndexTTS2 常驻服务
-
-模型只加载一次，之后每次配音只要几秒：
-
-```bash
-cd /path/to/index-tts               # 你本地的 IndexTTS 仓库
-uv run python /path/to/hermes-media/tts_server/indextts2_server.py --model-dir checkpoints --port 7861
-# IndexTTS2.5：加 --version 2.5
+```yaml
+image:
+  local:
+    python: D:/qwen-image/python/python.exe   # ★1 装了 torch + diffusers 的 Python
+    model: D:/models/Qwen-Image-2.1           # ★2 千问 Image 2.1 模型目录
+tts:
+  local:
+    index_tts_dir: D:/index-tts               # ★3 你的 index-tts 目录
+    python: uv run python                     #    整合包就写它自带的 python.exe 路径
 ```
 
-然后把 3~10 秒干净人声的参考音频放进 `voices/`，**文件名就是音色名**，比如 `voices/旁白男声.wav`、`voices/温柔女声.wav`。
+- 两个模型都用**各自原来的 Python 环境**运行，本项目不往里装任何东西。
+- 显存不够同时放下两个模型时，把 `image.local.offload` 改成 `true`。
 
-> 已经在 ComfyUI 里用 IndexTTS2 节点？把 `tts.backend` 改成 `comfyui`，导出 API 工作流，文本节点标题写 `$text.text!`，参考音频节点写 `$voice.~audio`（字段名按你的节点实际名称）。
+### 3. 再次双击 `start.bat`（或 `./start.sh`）
 
-### 4. 自检
+- 浏览器会自动打开 `http://127.0.0.1:8765`，两个模型在后台加载。
+- 右上角的绿点表示模型已就绪。
+- 关掉窗口时，模型进程会一起退出，不会残留占用显存。
 
-```bash
-hermes-media doctor                         # 检查 ComfyUI / IndexTTS2 / 工作流 / 音色
-hermes-media image "一只橘猫，水彩风" -r 16:9   # 不经过 Hermes，直接出图
-hermes-media tts "你好呀" -v 女声 -e 开心       # 直接配音
-```
+### 放音色
 
-### 5. 接入 Hermes Agent
+把 3~10 秒、干净无背景音的人声放进 `voices/` 目录，文件名对应预设，例如 `voices/温柔女声.wav`；也可以直接在界面「音色预设」节点上点「＋ 上传音色」。
 
-在 `~/.hermes/config.yaml` 里加上（服务名一定要叫 `media`，skill 里写的工具名是 `mcp_media_*`）：
+自检命令：`.venv/bin/hermes-media doctor`。它会列出配置、启动命令、模型状态，以及哪些预设音色还缺音频。
+
+## 四、接入 Hermes Agent（可选）
+
+在 `~/.hermes/config.yaml` 里加上（服务名必须是 `media`）：
 
 ```yaml
 mcp_servers:
   media:
-    command: "/path/to/hermes-media/.venv/bin/hermes-media"   # Windows: ...\.venv\Scripts\hermes-media.exe
-    args: ["serve"]
-    env:
-      HERMES_MEDIA_CONFIG: "/home/你/.hermes-media/config.yaml"
-    timeout: 900          # 出图/配音可能比较慢，给足时间
+    command: "D:/hermes-media/.venv/Scripts/hermes-media.exe"   # Linux/mac: /path/to/hermes-media/.venv/bin/hermes-media
+    args: ["-c", "D:/hermes-media/config.yaml", "serve"]
+    timeout: 1800
 ```
 
-或者用命令：`hermes mcp add media --command /path/to/.venv/bin/hermes-media --args serve`
-
-再把两个 skill 装进去，就有了 `/img`、`/voice` 斜杠命令：
+再把 skill 复制进去，就有了 `/img` 和 `/voice` 两个斜杠命令：
 
 ```bash
-mkdir -p ~/.hermes/skills/creative
 cp -r skills/img skills/voice ~/.hermes/skills/creative/
 ```
 
-重启 Hermes（或 `/reload-mcp`），试试：
+- Hermes 和网页界面**共用同一组预设**。
+- 如果网页界面开着，Hermes 会**直接复用已经加载好的模型**；界面没开时，Hermes 用到才自动启动模型。
 
 ```
-/img 小红书封面，标题"周末去哪玩"，清新插画风
-/voice 欢迎收看本期节目
-帮我写一段 30 字的咖啡店开业口播，然后用温柔女声配音
+/img 一只戴墨镜的橘猫在海边冲浪
+/img 小红书封面，标题"周末去哪玩"
+/voice 用旁白的声音，低沉地说：故事，要从三十年前说起
+帮我写一段 30 字的咖啡店开业口播，用活力带货的声音配音
 ```
 
-## 四、工具说明
+Hermes 可用的工具：`generate_image`（含 `style` 风格参数）、`text_to_speech`、`list_styles`、`list_voices`。
 
-| 工具 | 参数 | 说明 |
-|---|---|---|
-| `generate_image` | `prompt`、`ratio`(1:1/16:9/9:16/4:3/3:4/3:2/2:3/宽x高)、`negative_prompt`、`seed`、`count` | 按千问官方推荐分辨率出图，返回种子方便复现 |
-| `text_to_speech` | `text`、`voice`(模糊匹配)、`emotion`(一句话描述情绪)、`emo_alpha` | 有 `emotion` 时走 IndexTTS2 的文本情绪控制 |
-| `list_voices` | — | 列出 `voices/` 里的音色 |
-
-## 五、开发
+## 五、命令行
 
 ```bash
-pip install -e ".[dev]"
-pytest
+hermes-media ui                                   # 打开节点界面
+hermes-media image "江南古镇" -s 国风水墨 -r 9:16    # 直接出图
+hermes-media tts "你好呀" -v 温柔女声 -e 开心         # 直接配音
+hermes-media presets                              # 列出风格 / 音色 / 情绪
+hermes-media doctor                               # 自检
+hermes-media serve                                # MCP 服务（给 Hermes 用）
 ```
 
-测试用假的 ComfyUI / IndexTTS2 HTTP 服务覆盖了：DSL 解析、无标注工作流自动识别、参数注入、ComfyUI 轮询下载、OpenAI 兼容出图、IndexTTS2 配音、MCP 工具注册。
+## 六、目录结构
+
+```
+hermes_media/
+  webapp.py      网页服务（标准库实现，无额外依赖）
+  nodes.py       节点定义 + 图执行器
+  presets.py     风格 / 音色 / 情绪预设
+  workers.py     模型常驻进程管理（自动启动、复用、随主程序退出）
+  backends.py    出图 / 配音后端：local（默认）、openai 兼容、comfyui（可选）
+  server.py      Hermes MCP 工具
+  web/           前端（litegraph 节点画布）
+workers/
+  image_worker.py      千问 Image 2.1 常驻服务（diffusers）
+  indextts2_server.py  IndexTTS2 常驻服务
+presets/         styles.yaml、voices.yaml、emotions.yaml
+skills/          Hermes 的 /img、/voice
+```
+
+## 七、开发
+
+```bash
+pip install -e ".[dev]" && pytest
+```
+
+- 测试用 `tests/stubs` 里的假 `torch` / `diffusers` / `indextts` 模块，**真实启动**两个模型进程，然后跑完整流程。
+- 覆盖了：预设、节点图执行、出错处理、网页接口、上传音色、模型进程随父进程退出、MCP 工具注册。
 
 ## 致谢
 
-- ComfyUI 节点标题 DSL 来自 [Pixelle-MCP](https://github.com/ATH-MaaS/Pixelle-MCP)（MIT）
-- [IndexTTS](https://github.com/index-tts/index-tts)、[Qwen-Image](https://github.com/QwenLM/Qwen-Image)、[Hermes Agent](https://github.com/NousResearch/hermes-agent)
+[litegraph.js](https://github.com/jagenjo/litegraph.js)（MIT）· [ComfyUI](https://github.com/comfyanonymous/ComfyUI) · [Pixelle-MCP](https://github.com/ATH-MaaS/Pixelle-MCP)（MIT）·
+[IndexTTS](https://github.com/index-tts/index-tts) · [Qwen-Image](https://github.com/QwenLM/Qwen-Image) · [Hermes Agent](https://github.com/NousResearch/hermes-agent)
