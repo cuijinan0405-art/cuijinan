@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+output/
+config.yaml
+voices/*.wav
+voices/*.mp3
+.pytest_cache/

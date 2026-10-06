@@ -1,0 +1,55 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": { "unet_name": "qwen_image_2.1_fp8_e4m3fn.safetensors", "weight_dtype": "default" },
+    "_meta": { "title": "Load Diffusion Model（改成你本地的 2.1 模型文件名）" }
+  },
+  "2": {
+    "class_type": "CLIPLoader",
+    "inputs": { "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors", "type": "qwen_image", "device": "default" },
+    "_meta": { "title": "Load CLIP（改成你本地的文本编码器文件名）" }
+  },
+  "3": {
+    "class_type": "VAELoader",
+    "inputs": { "vae_name": "qwen_image_vae.safetensors" },
+    "_meta": { "title": "Load VAE" }
+  },
+  "4": {
+    "class_type": "ModelSamplingAuraFlow",
+    "inputs": { "shift": 3.1, "model": ["1", 0] },
+    "_meta": { "title": "ModelSamplingAuraFlow" }
+  },
+  "5": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "text": "", "clip": ["2", 0] },
+    "_meta": { "title": "$prompt.text!:正向提示词" }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "text": "", "clip": ["2", 0] },
+    "_meta": { "title": "$negative_prompt.text:反向提示词" }
+  },
+  "7": {
+    "class_type": "EmptySD3LatentImage",
+    "inputs": { "width": 1328, "height": 1328, "batch_size": 1 },
+    "_meta": { "title": "Empty Latent" }
+  },
+  "8": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 0, "steps": 20, "cfg": 2.5, "sampler_name": "euler", "scheduler": "simple", "denoise": 1,
+      "model": ["4", 0], "positive": ["5", 0], "negative": ["6", 0], "latent_image": ["7", 0]
+    },
+    "_meta": { "title": "KSampler" }
+  },
+  "9": {
+    "class_type": "VAEDecode",
+    "inputs": { "samples": ["8", 0], "vae": ["3", 0] },
+    "_meta": { "title": "VAE Decode" }
+  },
+  "10": {
+    "class_type": "SaveImage",
+    "inputs": { "filename_prefix": "hermes_media", "images": ["9", 0] },
+    "_meta": { "title": "$output.image" }
+  }
+}

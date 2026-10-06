@@ -1,0 +1,34 @@
+# 复制为 config.yaml（或 ~/.hermes-media/config.yaml）后按你的本地环境修改。
+# 相对路径以本文件所在目录为基准。
+
+output_dir: ~/hermes-media-output   # 生成的图片 / 音频都放这里
+
+image:
+  backend: comfyui            # comfyui | openai
+  comfyui:
+    url: http://127.0.0.1:8188
+    # 在 ComfyUI 里打开你能跑通的千问 Image 2.1 工作流 → 菜单「导出 (API)」→ 保存到这里
+    # 节点不需要改标题也能用（会自动识别提示词/种子/尺寸），想精确控制可参考示例里的 $prompt.text! 写法
+    workflow: workflows/qwen_image_2_1_api.json
+    timeout: 600
+  openai:                     # 如果你的千问 Image 是 OpenAI 兼容接口（/v1/images/generations）
+    base_url: http://127.0.0.1:8000/v1
+    api_key: ""
+    model: qwen-image-2.1
+  default_ratio: "1:1"        # 1:1 16:9 9:16 4:3 3:4 3:2 2:3
+  negative_prompt: ""
+
+tts:
+  backend: indextts2          # indextts2 | openai | comfyui
+  indextts2:
+    url: http://127.0.0.1:7861   # tts_server/indextts2_server.py 的地址
+  openai:                     # OpenAI 兼容的 /v1/audio/speech
+    base_url: http://127.0.0.1:8000/v1
+    api_key: ""
+    model: tts-1
+  comfyui:                    # 用 ComfyUI 里的 IndexTTS2 节点；工作流需标注 $text.text! 和 $voice.~audio
+    url: http://127.0.0.1:8188
+    workflow: workflows/indextts2_api.json
+  voices_dir: voices          # 参考音色目录，文件名即音色名，例如 voices/旁白男声.wav
+  default_voice: ""           # 留空则用目录里第一个
+  emo_alpha: 0.6              # 指定情绪时的默认强度
