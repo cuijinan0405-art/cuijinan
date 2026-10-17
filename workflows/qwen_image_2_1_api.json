@@ -1,18 +1,18 @@
 {
   "1": {
     "class_type": "UNETLoader",
-    "inputs": { "unet_name": "qwen_image_2.1_fp8_e4m3fn.safetensors", "weight_dtype": "default" },
-    "_meta": { "title": "Load Diffusion Model（改成你本地的 2.1 模型文件名）" }
+    "inputs": { "unet_name": "qwen_image_2.1_int8_convrot.safetensors", "weight_dtype": "default" },
+    "_meta": { "title": "Load Diffusion Model（文件名可在 config.yaml 的 image.comfyui.unet 改）" }
   },
   "2": {
     "class_type": "CLIPLoader",
-    "inputs": { "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors", "type": "qwen_image", "device": "default" },
-    "_meta": { "title": "Load CLIP（改成你本地的文本编码器文件名）" }
+    "inputs": { "clip_name": "qwen3vl_8b_int8_convrot.safetensors", "type": "qwen_image", "device": "default" },
+    "_meta": { "title": "Load CLIP（文件名可在 config.yaml 的 image.comfyui.clip 改）" }
   },
   "3": {
     "class_type": "VAELoader",
-    "inputs": { "vae_name": "qwen_image_vae.safetensors" },
-    "_meta": { "title": "Load VAE" }
+    "inputs": { "vae_name": "qwen_image_2.1_vae_bf16.safetensors" },
+    "_meta": { "title": "Load VAE（文件名可在 config.yaml 的 image.comfyui.vae 改）" }
   },
   "4": {
     "class_type": "ModelSamplingAuraFlow",

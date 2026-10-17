@@ -48,6 +48,10 @@ DEFAULTS: dict[str, Any] = {
         "comfyui": {
             "url": "http://127.0.0.1:8188",
             "workflow": "workflows/qwen_image_2_1_api.json",
+            # 留空 = 用工作流里写的文件名；填了就替换加载节点里的文件（ComfyUI models 目录下的文件名）
+            "unet": "",
+            "clip": "",
+            "vae": "",
             "timeout": 600,
         },
         "openai": {

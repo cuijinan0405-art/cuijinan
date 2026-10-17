@@ -198,6 +198,14 @@ def test_comfyui_backend_still_works(tmp_path, monkeypatch):
     cfg.image["backend"] = "comfyui"
     r = asyncio.run(ImageGenerator(cfg, None, httpx.MockTransport(handler)).generate("猫", ratio="16:9", seed=1))
     assert r.files[0].read_bytes() == b"png" and submitted[0]["7"]["inputs"]["width"] == 1664
+    assert submitted[0]["2"]["inputs"]["clip_name"] == "qwen3vl_8b_int8_convrot.safetensors"
+
+    # 配置里写了 ComfyUI 已有的模型文件名，就替换工作流加载节点里的文件
+    cfg.image["comfyui"].update(unet="my_unet.safetensors", vae="my_vae.safetensors")
+    asyncio.run(ImageGenerator(cfg, None, httpx.MockTransport(handler)).generate("猫", seed=1))
+    wf = submitted[-1]
+    assert wf["1"]["inputs"]["unet_name"] == "my_unet.safetensors" and wf["3"]["inputs"]["vae_name"] == "my_vae.safetensors"
+    assert wf["2"]["inputs"]["clip_name"] == "qwen3vl_8b_int8_convrot.safetensors"  # 没填的保持工作流原样
 
 
 def test_openai_image(tmp_path):
