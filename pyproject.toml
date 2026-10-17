@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hermes-media"
 version = "0.1.0"
-description = "本地出图（千问 Qwen-Image 2.1）/ 配音（IndexTTS2）节点工作台，带 Hermes Agent MCP 接入"
+description = "本地出图（千问 Qwen-Image 2.1）/ 配音（IndexTTS2）/ 合成短视频节点工作台，带 Hermes Agent MCP 接入"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -14,6 +14,7 @@ dependencies = [
     "httpx>=0.27",
     "pyyaml>=6",
     "huggingface_hub>=0.30",
+    "imageio-ffmpeg>=0.5",
 ]
 
 [project.optional-dependencies]

@@ -1,0 +1,32 @@
+# 分镜脚本示例：hermes-media video examples/江南古镇.yaml
+# 顶部是全片默认值；scenes 里每项是一个镜头，镜头里写的字段覆盖默认值。
+
+title: 江南古镇一日游
+ratio: "9:16"            # 9:16 → 1080x1920；也可以 16:9、1:1、3:4、4:3
+style: 国风水墨           # 出图风格预设（hermes-media presets 查看全部）
+voice: 旁白·沉稳男声       # 音色预设
+emotion: 平静舒缓
+transition: random       # 镜头之间的转场：fade、dissolve、slideleft、wipeleft、circleopen…，none 为硬切，random 随机
+motion: zoom_in          # 运镜：zoom_in 推近、zoom_out 拉远、pan_left、pan_right、none
+
+scenes:
+  - text: 清晨的乌镇，还笼罩在一层薄雾里。
+    image: 晨雾中的江南水乡，石桥，乌篷船，远处白墙黛瓦
+
+  - text: 青石板路，白墙黛瓦，小桥流水。走累了，就在河边喝一杯茶。
+    image: 青石板小巷，两侧白墙黛瓦，河边茶馆
+    motion: pan_left
+
+  - text: 傍晚，灯笼一盏盏亮起来。
+    image: 黄昏的水乡，河面倒映着红灯笼
+    motion: zoom_out
+
+  - text: 下次，我们去西塘。
+    image: 古镇廊棚下的夜景，远景
+    emotion: 开心
+    hold: 1              # 最后多停 1 秒
+
+# 其它可写在镜头里的字段：
+#   image_file: 素材/西塘.jpg   直接用现成图片，不出图
+#   seed: 123                  换一张图（不写时按内容固定种子，重跑画面不变）
+#   voice / emotion / emo_alpha / style / model / transition

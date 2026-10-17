@@ -52,6 +52,19 @@ tts:
   voices_dir: voices    # 参考音色目录（界面里「上传音色」也存到这里）
   default_voice: ""     # 留空 = 列表第一个
 
+# 合成短视频（hermes-media video 脚本.yaml）。下面都是默认值，不改也能用。
+video:
+  ffmpeg: ""            # 留空：先找系统里的 ffmpeg，没有就用自动安装的 imageio-ffmpeg
+  fps: 30
+  transition_duration: 0.5   # 转场时长（秒）
+  codec: libx264        # 有 N 卡可以改成 h264_nvenc，快很多
+  crf: 20               # 画质，越小越清晰、文件越大
+  loudness: -14         # 响度 LUFS
+  subtitle:
+    burn: true          # 字幕烧进画面
+    srt: true           # 另存一份 .srt 字幕
+    font: ""            # 留空 = 微软雅黑（Windows）
+
 # 风格 / 音色 / 情绪预设在 presets/ 目录下的 YAML 里，随便改，刷新界面就生效。
 presets_dir: presets
 

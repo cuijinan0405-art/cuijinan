@@ -32,6 +32,13 @@
   - 也可以在界面上点「＋ 上传音色」添加自己的声音。
   - 配好 IndexTTS 目录后，它自带的示例音色也会自动出现，开箱就能试。
 
+**合成短视频（🎬 命令行）**：
+- 写一个分镜脚本（YAML，见 [`examples/江南古镇.yaml`](examples/江南古镇.yaml)），每个镜头一句旁白 + 一句画面描述。
+- `hermes-media video 脚本.yaml` 会逐句配音、逐镜头出图，再用 ffmpeg 合成带**运镜、转场、字幕**的 MP4（默认竖屏 1080×1920），同时输出一份 `.srt` 字幕。
+- 镜头时长由配音长度自动决定，字幕按句对齐，不用手动打轴；响度统一到 -14 LUFS。
+- 图和配音都有缓存：改了一句旁白再跑，只重新配那一句，几秒就能出新片。
+- 不用单独装 ffmpeg：系统里没有时会用自动安装的 `imageio-ffmpeg`。也可以在 `config.yaml` 的 `video.ffmpeg` 里指定。
+
 **模型管理（📦 模型）**：
 - 一键下载出图模型，下载完就出现在「千问 Image 2.1」节点的「模型」下拉框里，选哪个就用哪个。切换时会自动重新加载。
 - 支持 HuggingFace、HF 国内镜像、ModelScope 魔搭三种下载源，断了重试会接着下。
@@ -151,6 +158,7 @@ hermes-media presets                              # 列出风格 / 音色 / 情�
 hermes-media models                               # 列出出图模型（已下载 / 可下载）
 hermes-media download qwen-image-2.1 --source hf-mirror   # 命令行下载模型
 hermes-media image "江南古镇" -m "GGUF Q8"           # 指定模型出图
+hermes-media video examples/江南古镇.yaml          # 按分镜脚本合成短视频
 hermes-media doctor                               # 自检
 hermes-media serve                                # MCP 服务（给 Hermes 用）
 ```
@@ -162,6 +170,8 @@ hermes_media/
   webapp.py      网页服务（标准库实现，无额外依赖）
   nodes.py       节点定义 + 图执行器
   presets.py     风格 / 音色 / 情绪预设
+  storyboard.py  分镜脚本 → 出图 + 配音（带缓存）→ 合成视频
+  video.py       时间轴、字幕、ffmpeg 命令
   models.py      出图模型列表（目录 + 已下载 + 自定义）
   downloads.py   模型下载（HuggingFace / 镜像 / 魔搭）
   workers.py     模型常驻进程管理（自动启动、复用、随主程序退出）
@@ -172,6 +182,7 @@ workers/
   image_worker.py      千问 Image 2.1 常驻服务（diffusers）
   indextts2_server.py  IndexTTS2 常驻服务
 presets/         styles.yaml、voices.yaml、emotions.yaml、models.yaml
+examples/        分镜脚本示例
 skills/          Hermes 的 /img、/voice
 ```
 
