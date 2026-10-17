@@ -48,6 +48,8 @@
 >
 > 社区仓库可能改名或删除，下载失败时界面会显示原因。也可以在 `presets/models.yaml` 里加别的仓库，或在 `config.yaml` 的 `image.models` 里手动加本地模型（支持替换扩散模型、文本编码器和 LoRA）。
 >
+> 已经在 ComfyUI 里下好了千问 Image 2.1（比如 `qwen_image_2.1_int8_convrot.safetensors` 这一套）？不用再下载：把 `image.backend` 改成 `comfyui`，在 `image.comfyui` 里填 ComfyUI 地址和三个文件名，见 `config.example.yaml` 末尾的例子。
+>
 > 使用 GGUF 版本需要较新的 diffusers，并在千问的 Python 环境里安装 `gguf`：`pip install -U diffusers gguf`。
 
 **和 ComfyUI 一样的操作**：

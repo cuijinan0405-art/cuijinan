@@ -46,6 +46,19 @@ def _load_workflow(cfg: Config, section: dict) -> dict:
     return wf
 
 
+# 加载节点 → 配置项：让已有的 ComfyUI 模型文件直接能用，不用改工作流
+LOADER_FIELDS = {"UNETLoader": ("unet", "unet_name"), "CLIPLoader": ("clip", "clip_name"),
+                 "VAELoader": ("vae", "vae_name")}
+
+
+def _set_model_files(wf: dict, section: dict) -> dict:
+    for node in wf.values():
+        key, field_name = LOADER_FIELDS.get(node.get("class_type"), (None, None))
+        if key and section.get(key):
+            node["inputs"][field_name] = section[key]
+    return wf
+
+
 def _error_text(r: httpx.Response) -> str:
     try:
         return r.json().get("error") or r.text[:500]
@@ -112,7 +125,7 @@ class ImageGenerator:
 
     async def _comfyui(self, prompt, neg, width, height, seed, count) -> Result:
         sec = self.cfg.image["comfyui"]
-        wf = _load_workflow(self.cfg, sec)
+        wf = _set_model_files(_load_workflow(self.cfg, sec), sec)
         specs = resolve_specs(wf)
         client = ComfyUIClient(sec["url"], sec.get("timeout", 600), self.transport)
         prefix = _stamp(prompt, "img")

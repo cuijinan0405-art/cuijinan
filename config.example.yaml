@@ -58,4 +58,12 @@ presets_dir: presets
 # ---- 下面是可选的其它后端，一般用不到 ----
 # image.backend: openai   → 任何 OpenAI 兼容出图接口（/v1/images/generations）
 # image.backend: comfyui  → 已有 ComfyUI 时，用 workflows/ 里导出的 API 工作流
+#   ComfyUI 里已经有千问 Image 2.1 的模型文件，就不用再下载，例如：
+#   image:
+#     backend: comfyui
+#     comfyui:
+#       url: http://127.0.0.1:8188      # 你的 ComfyUI 地址（桌面版默认端口可能是 8000）
+#       unet: qwen_image_2.1_int8_convrot.safetensors   # models/diffusion_models 下的文件名
+#       clip: qwen3vl_8b_int8_convrot.safetensors       # models/text_encoders 下的文件名
+#       vae: qwen_image_2.1_vae_bf16.safetensors        # models/vae 下的文件名
 # tts.backend:   openai   → OpenAI 兼容的 /v1/audio/speech
