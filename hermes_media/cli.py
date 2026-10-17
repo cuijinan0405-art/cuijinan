@@ -7,6 +7,7 @@
   hermes-media presets                       # 列出风格 / 音色 / 情绪预设
   hermes-media models                        # 列出出图模型（含可下载的）
   hermes-media download qwen-image-2.1 --source hf-mirror   # 下载模型
+  hermes-media video 脚本.yaml                # 按分镜脚本出图、配音、合成短视频
   hermes-media doctor                        # 检查配置和模型状态
 """
 
@@ -14,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import subprocess
 import sys
 from pathlib import Path
 
@@ -24,6 +26,8 @@ from .config import Config, find_config_file
 from .downloads import SOURCES, DownloadManager
 from .models import ModelRegistry
 from .presets import Presets
+from .storyboard import Storyboard, VideoComposer
+from .video import find_ffmpeg
 from .workers import WorkerManager
 
 
@@ -79,7 +83,32 @@ async def _doctor(cfg: Config) -> int:
     missing = [v for v in p.voices(include_missing=True) if not v.available]
     if missing:
         print("  这些预设音色还缺参考音频（放进去就能用）: " + "、".join(f"{v.name} → {v.file}" for v in missing))
+    try:
+        ff = find_ffmpeg(cfg.data["video"].get("ffmpeg") or "")
+        r = subprocess.run([ff, "-hide_banner", "-filters"], capture_output=True, text=True, errors="replace")
+        has_subs = " subtitles " in r.stdout
+        print(f"  [OK]  ffmpeg: {ff}")
+        if not has_subs:
+            print("  [提示] 这个 ffmpeg 没有字幕滤镜（libass），合成视频时字幕烧不进画面，只能输出 .srt")
+    except FileNotFoundError as e:
+        ok = False
+        print(f"  [失败] {e}")
     return 0 if ok else 1
+
+
+async def _video(cfg: Config, script: str, out: str | None) -> int:
+    sb = Storyboard.load(script)
+    workers = WorkerManager(cfg)
+    composer = VideoComposer(cfg, ImageGenerator(cfg, workers), TTSGenerator(cfg, workers),
+                             progress=lambda msg: print(">> " + msg, file=sys.stderr, flush=True))
+    r = await composer.compose(sb, Path(out) if out else None)
+    print(f"完成：{r.duration:.1f} 秒，{r.info['scenes']} 个镜头"
+          f"（新配音 {r.info['tts']} 句、复用 {r.info['tts_cached']} 句；"
+          f"新出图 {r.info['image']} 张、复用 {r.info['image_cached']} 张）", file=sys.stderr)
+    print(r.video)
+    if r.srt:
+        print(r.srt)
+    return 0
 
 
 def _download(cfg: Config, model_id: str, source: str | None) -> int:
@@ -129,6 +158,10 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("-e", "--emotion", default=None)
     t.add_argument("-a", "--alpha", type=float, default=None)
 
+    v = sub.add_parser("video", help="按分镜脚本合成短视频")
+    v.add_argument("script", help="分镜脚本 YAML")
+    v.add_argument("-o", "--output", default=None, help="输出 mp4 路径（默认放在输出目录 video/<标题>/ 下）")
+
     sub.add_parser("presets", help="列出风格 / 音色 / 情绪预设")
     sub.add_parser("models", help="列出出图模型")
     d = sub.add_parser("download", help="下载出图模型")
@@ -155,6 +188,8 @@ def main(argv: list[str] | None = None) -> int:
                 args.prompt, args.ratio, args.negative, args.seed, args.count, style=args.style, model=args.model))
         elif args.cmd == "tts":
             r = asyncio.run(TTSGenerator(cfg, WorkerManager(cfg)).speak(args.text, args.voice, args.emotion, args.alpha))
+        elif args.cmd == "video":
+            return asyncio.run(_video(cfg, args.script, args.output))
         elif args.cmd == "models":
             reg = ModelRegistry(cfg)
             print(f"模型目录: {reg.models_dir}")

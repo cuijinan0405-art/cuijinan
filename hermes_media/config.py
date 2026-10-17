@@ -92,6 +92,29 @@ DEFAULTS: dict[str, Any] = {
         "default_voice": "",
         "emo_alpha": 0.6,
     },
+    "video": {
+        "ffmpeg": "",  # 留空 = 系统 PATH 里的 ffmpeg，再没有就用 pip 包 imageio-ffmpeg 自带的
+        "fps": 30,
+        "lead": 0.3,  # 每个镜头开头留白（秒）
+        "tail": 0.5,  # 每个镜头结尾留白（秒）
+        "sentence_gap": 0.15,  # 同一镜头里句与句之间的停顿（秒）
+        "transition_duration": 0.5,
+        "zoom": 0.12,  # 运镜幅度：推近 / 拉远 / 平移时放大 12%
+        "codec": "libx264",  # 有 N 卡可以改成 h264_nvenc
+        "crf": 20,
+        "preset": "medium",
+        "audio_bitrate": "192k",
+        "loudness": -14,  # 响度 LUFS，抖音 / B 站常用 -14
+        "subtitle": {
+            "burn": True,  # 字幕烧进画面
+            "srt": True,  # 另存一份 .srt
+            "font": "",  # 留空 = Windows 微软雅黑 / macOS 苹方 / Linux Noto Sans CJK SC
+            "fonts_dir": "",  # 字体不在系统里时，把字体文件放进这个目录
+            "size": 0,  # 0 = 按画面自动
+            "max_chars": 0,  # 每行最多几个字，0 = 竖屏 16、横屏 24
+            "margin_v": 0,  # 字幕离底部的距离（像素），0 = 竖屏留出平台按钮区
+        },
+    },
     "presets_dir": "presets",
 }
 
